@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reth Morgan — Web Dashboard</title>
+    <style>
+        body { background-color: #0b0c0e; color: #f2f3f5; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .container { background-color: #121316; padding: 40px; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,0.8); text-align: center; max-width: 480px; width: 90%; border: 1px solid #1f2026; }
+        .mascot-avatar { width: 100px; height: 100px; border-radius: 50%; border: 3px solid #f53b57; margin-bottom: 15px; object-fit: cover; box-shadow: 0 0 15px rgba(245, 59, 87, 0.4); }
+        h1 { color: #f53b57; margin-bottom: 5px; font-size: 30px; letter-spacing: 2px; font-weight: 800; }
+        .slogan { color: #8a8f98; font-size: 13px; font-style: italic; margin-bottom: 25px; letter-spacing: 0.5px; }
+        .status-box { background-color: #17181c; padding: 20px; border-radius: 8px; margin-bottom: 25px; text-align: left; border: 1px solid #1f2026; border-left: 4px solid #f53b57; }
+        .status-item { margin: 10px 0; font-size: 14px; color: #c4c7cc; }
+        .status-item strong { color: white; }
+        .btn-panel { background-color: #5865F2; color: white; border: none; padding: 14px 28px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; text-decoration: none; display: block; width: 100%; box-sizing: border-box; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+        .btn-panel:hover { background-color: #4752C4; transform: translateY(-1px); }
+        footer { margin-top: 30px; font-size: 11px; color: #43474e; letter-spacing: 0.5px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <img src="https://i.imgur.com/83uE0T1.jpeg" class="mascot-avatar" alt="Dexter Morgan">
+        <h1>RETH MORGAN</h1>
+        <div class="slogan">"Executando o caos. Codificando a ordem."</div>
+        
+        <div class="status-box">
+            <div class="status-item"><strong>Status global:</strong> <span style="color: #2ecc71; font-weight: bold;">ONLINE</span></div>
+            <div class="status-item"><strong>Sistemas integrados:</strong> <span id="cmd-count">Carregando...</span></div>
+            <div class="status-item"><strong>Developer principal:</strong> PT</div>
+        </div>
+
+        <a href="/auth/login" class="btn-panel">Conectar via Discord</a>
+        
+        <footer>RETH MORGAN SHIELD SYSTEM • V8 FULL STACK</footer>
+    </div>
+
+    <script>
+        fetch('/api/status')
+            .then(res => res.json())
+            .then(data => { document.getElementById('cmd-count').innerText = data.commandsCount + ' módulos ativos'; });
+    </script>
+</body>
+</html>

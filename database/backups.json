@@ -1,0 +1,249 @@
+{
+  "1507627638720823316": {
+    "nome": "Dev's Reth",
+    "data": "24/05/2026",
+    "cargos": [
+      {
+        "id": "1507667364685283431",
+        "name": "Developer´s",
+        "color": 918532,
+        "hoist": true,
+        "mentionable": false,
+        "permissions": "7047098549841079",
+        "position": 2
+      },
+      {
+        "id": "1507667365851037857",
+        "name": "BOT´S",
+        "color": 0,
+        "hoist": true,
+        "mentionable": false,
+        "permissions": "0",
+        "position": 3
+      },
+      {
+        "id": "1507954046579769525",
+        "name": "BetaTester´s",
+        "color": 2413319,
+        "hoist": false,
+        "mentionable": false,
+        "permissions": "0",
+        "position": 1
+      }
+    ],
+    "canais": [
+      {
+        "name": "ɪɴғᴏʀᴍᴀçõᴇs",
+        "type": 4,
+        "parentId": null,
+        "position": 0,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": []
+      },
+      {
+        "name": "ᴄᴏᴍᴜɴɪᴅᴀᴅᴇ",
+        "type": 4,
+        "parentId": null,
+        "position": 2,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": []
+      },
+      {
+        "name": "sᴇɢᴜʀᴀɴçᴀ",
+        "type": 4,
+        "parentId": null,
+        "position": 3,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "1024"
+          }
+        ]
+      },
+      {
+        "name": "💬-ɢᴇʀᴀʟ",
+        "type": 0,
+        "parentId": "1507667369122861097",
+        "position": 0,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "2048",
+            "deny": "0"
+          }
+        ]
+      },
+      {
+        "name": "🎧 ᴠᴏɪᴄᴇ-ᴅᴇᴠ",
+        "type": 2,
+        "parentId": "1507667369122861097",
+        "position": 0,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "2048"
+          }
+        ]
+      },
+      {
+        "name": "invasao-links",
+        "type": 0,
+        "parentId": "1507667370158719117",
+        "position": 0,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "3072"
+          }
+        ]
+      },
+      {
+        "name": "comandos-staff",
+        "type": 0,
+        "parentId": "1507667370158719117",
+        "position": 1,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "3072"
+          }
+        ]
+      },
+      {
+        "name": "log-msg",
+        "type": 0,
+        "parentId": "1507667370158719117",
+        "position": 2,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "3072"
+          }
+        ]
+      },
+      {
+        "name": "entrada",
+        "type": 0,
+        "parentId": "1507667370158719117",
+        "position": 3,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "3072"
+          }
+        ]
+      },
+      {
+        "name": "📢ᴀᴠɪsᴏs",
+        "type": 0,
+        "parentId": "1507667367206060085",
+        "position": 0,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": []
+      },
+      {
+        "name": "📜ʀᴇɢʀᴀs",
+        "type": 0,
+        "parentId": "1507667367206060085",
+        "position": 1,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": []
+      },
+      {
+        "name": "ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ",
+        "type": 4,
+        "parentId": null,
+        "position": 1,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "1024",
+            "deny": "274877908992"
+          }
+        ]
+      },
+      {
+        "name": "💻-ɢᴇʀᴀʟ-ᴅᴇᴠ",
+        "type": 0,
+        "parentId": "1507972342419292220",
+        "position": 0,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "1024",
+            "deny": "274877908992"
+          }
+        ]
+      },
+      {
+        "name": "🔧-ʀᴇᴘᴏsɪᴛᴏʀɪᴏ",
+        "type": 0,
+        "parentId": "1507972342419292220",
+        "position": 1,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "1024",
+            "deny": "274877908992"
+          }
+        ]
+      },
+      {
+        "name": "🐛-ʙᴜɢ-ʀᴇᴘᴏʀᴛ",
+        "type": 0,
+        "parentId": "1507972342419292220",
+        "position": 2,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "1024",
+            "deny": "274877908992"
+          }
+        ]
+      }
+    ]
+  }
+}
