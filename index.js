@@ -1,5 +1,11 @@
 // Arquivo: index.js
+// Adiciona isto logo após os requires no topo do teu index.js
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
 
+app.get('/', (req, res) => res.send('Reth Morgan Online!'));
+app.listen(port, () => console.log(`Servidor de porta aberto na porta ${port}`));
 // --- TRAVAS DE SEGURANÇA CONTRA CRASHES DE CONEXÃO E CANAL DE VOZ ---
 process.emitWarning = () => {}; 
 process.env.NODE_NO_WARNINGS = '1';
