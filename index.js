@@ -528,4 +528,5 @@ Se quem falou NÃO for o PT, ou for apenas uma conversa comum, responda de forma
 });
 
 // --- LOGIN DO BOT ---
-client.login('MTUwNzYyNjM0MDg5ODE4MTIxMA.Gk7slR.tImyfmmKVjspbVwx4aAsNgcn1R4W_2jnrF5sWw');
+// Substitua o final do seu index.js por:
+client.login(process.env.DISCORD_TOKEN);
