@@ -10,7 +10,7 @@ const fs         = require('fs');
 const path       = require('path');
 
 const app  = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -23,7 +23,7 @@ app.use(session({
 
 const CLIENT_ID     = process.env.DISCORD_CLIENT_ID;
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-const REDIRECT_URI  = process.env.REDIRECT_URI || `http://localhost:${port}/auth/callback`;
+const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
 
 function requireLogin(req, res, next) {
     if (req.session?.user) return next();
@@ -194,7 +194,7 @@ process.on('uncaughtException', (err) => {
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, PermissionsBitField } = require('discord.js');
 const { perguntarParaIA } = require("./gemini.js");
 
-const PREFIX   = 'r!';
+const PREFIX   = 'd!';
 const OWNER_ID = '1507543140800921610';
 
 const client = new Client({
