@@ -2,7 +2,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // COLA A CHAVE NOVA GERADA NO AI STUDIO DA CONTA NOVA AQUI
 // Certifique-se de que não haja espaços extras no início ou no fim.
-const apiKey = "AIzaSyCS5dGhHnTUlYyMq-nqYrUcJJzeNHzRzcE"; 
+const apiKey = "AIzaSyAmquu4-rwbRsmNJd7AczAdvlDsBux28EE"; 
 
 const genAI = new GoogleGenerativeAI(apiKey);
 
