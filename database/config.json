@@ -13,7 +13,7 @@
     "logs_msg": "1507665677547470949",
     "logs_seguranca": "1507665537147207832",
     "anticaps": false,
-    "antipreconceito": false,
+    "antipreconceito": true,
     "antibot": true,
     "antinuke": true,
     "logs_join": "1507833792214335689",
@@ -22,19 +22,19 @@
     "bypass_roles": [
       "1507667364685283431"
     ],
-    "logChannelId": "",
+    "logChannelId": "1507667381768687718",
     "customPunishMsg": "",
     "travaConvites": true,
     "bloqueioBots": true,
     "antiMassBan": true,
     "maxBans": "1",
-    "antiMassKick": false,
+    "antiMassKick": true,
     "maxKicks": "1",
     "detectorSelfbots": false,
-    "whitelistIds": "",
-    "autoModNomes": false,
+    "whitelistIds": "1507543140800921610",
+    "autoModNomes": true,
     "antiCapsLock": true,
-    "antiSpoiler": false,
+    "antiSpoiler": true,
     "limiteMencoes": "5",
     "filtroEmojis": false,
     "maxEmojis": "10",
@@ -42,6 +42,16 @@
     "limpezaAgendada": false,
     "horasLimpeza": "24",
     "filtroLinks": "",
-    "mutedRoleId": ""
+    "mutedRoleId": "",
+    "cargos_protegidos": [
+      "1507667364685283431",
+      "1507975150409089024"
+    ],
+    "logs_anticargos": "1507667376941039697",
+    "canal_fun": "1507667371425267843",
+    "xp_ativo": true,
+    "coins_ativo": true,
+    "morgan_ativo": true,
+    "morgan_canal": "1508281003897126992"
   }
 }

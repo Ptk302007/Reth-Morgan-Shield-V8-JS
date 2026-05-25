@@ -2,14 +2,14 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // COLA A CHAVE NOVA GERADA NO AI STUDIO DA CONTA NOVA AQUI
 // Certifique-se de que não haja espaços extras no início ou no fim.
-const apiKey = "AIzaSyBVgdBgqRfjzIj4yiWtuHTn0IqJMQFVQgU"; 
+const apiKey = "AIzaSyCS5dGhHnTUlYyMq-nqYrUcJJzeNHzRzcE"; 
 
 const genAI = new GoogleGenerativeAI(apiKey);
 
 async function perguntarParaIA(pergunta, systemInstruction) {
     try {
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-pro",
+            model: "gemini-2.5-flash",
             systemInstruction: systemInstruction
         });
 

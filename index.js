@@ -1,87 +1,252 @@
-// Arquivo: index.js
-// Adiciona isto logo após os requires no topo do teu index.js
-const express = require('express');
-const app = express();
+// ============================================================
+//  RETH MORGAN — SHIELD SYSTEM V8
+//  index.js — Servidor + Bot + Painel Web Integrado
+// ============================================================
+require('dotenv').config();
+const express    = require('express');
+const session    = require('express-session');
+const fetch      = require('node-fetch');
+const fs         = require('fs');
+const path       = require('path');
+
+const app  = express();
 const port = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.send('Reth Morgan Online!'));
-app.listen(port, () => console.log(`Servidor de porta aberto na porta ${port}`));
-// --- TRAVAS DE SEGURANÇA CONTRA CRASHES DE CONEXÃO E CANAL DE VOZ ---
-process.emitWarning = () => {}; 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'reth_morgan_secret_v8',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 1000 * 60 * 60 * 24 }
+}));
+
+const CLIENT_ID     = process.env.DISCORD_CLIENT_ID;
+const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
+const REDIRECT_URI  = process.env.REDIRECT_URI || `http://localhost:${port}/auth/callback`;
+
+function requireLogin(req, res, next) {
+    if (req.session?.user) return next();
+    return res.redirect('/');
+}
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/api/status', (req, res) => {
+    res.json({
+        commandsCount: client.commands?.size || 0,
+        guildsCount:   client.guilds?.cache?.size || 0,
+        status:        'online'
+    });
+});
+
+app.get('/auth/login', (req, res) => {
+    const params = new URLSearchParams({
+        client_id:     CLIENT_ID,
+        redirect_uri:  REDIRECT_URI,
+        response_type: 'code',
+        scope:         'identify guilds'
+    });
+    res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
+});
+
+app.get('/auth/callback', async (req, res) => {
+    const code = req.query.code;
+    if (!code) return res.redirect('/');
+    try {
+        const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+                grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI
+            })
+        });
+        const tokenData = await tokenRes.json();
+        const accessToken = tokenData.access_token;
+
+        const userRes = await fetch('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const userData = await userRes.json();
+
+        const guildsRes = await fetch('https://discord.com/api/users/@me/guilds', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const guildsData = await guildsRes.json();
+
+        const adminGuilds = guildsData.filter(g => {
+            const isAdmin = (BigInt(g.permissions) & BigInt(0x8)) === BigInt(0x8);
+            const botEsta = client.guilds.cache.has(g.id);
+            return isAdmin && botEsta;
+        }).map(g => ({ id: g.id, name: g.name }));
+
+        req.session.user = {
+            id: userData.id, username: userData.username,
+            avatar: userData.avatar
+                ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
+                : `https://cdn.discordapp.com/embed/avatars/0.png`
+        };
+        req.session.guilds = adminGuilds;
+        res.redirect('/dashboard');
+    } catch (e) {
+        console.error('[OAuth] Erro:', e);
+        res.redirect('/');
+    }
+});
+
+app.get('/dashboard', requireLogin, (req, res) => {
+    const { user, guilds } = req.session;
+    let panelHtml = fs.readFileSync(path.join(__dirname, 'public', 'panel.html'), 'utf-8');
+    panelHtml = panelHtml.replace(
+        '/* DATA_INJECTION */',
+        `window.dashboardData = ${JSON.stringify({ username: user.username, avatar: user.avatar, guilds })};`
+    );
+    res.send(panelHtml);
+});
+
+app.get('/api/config/:guildId', requireLogin, (req, res) => {
+    const { guildId } = req.params;
+    const temAcesso = req.session.guilds?.some(g => g.id === guildId);
+    if (!temAcesso) return res.status(403).json({ error: 'Sem permissão.' });
+    try {
+        const configs = JSON.parse(fs.readFileSync('./database/config.json', 'utf-8'));
+        res.json(configs[guildId] || {});
+    } catch (e) { res.json({}); }
+});
+
+app.post('/api/config/save', requireLogin, (req, res) => {
+    const { guildId, ...novaConfig } = req.body;
+    const temAcesso = req.session.guilds?.some(g => g.id === guildId);
+    if (!temAcesso) return res.status(403).json({ message: 'Sem permissão.' });
+    try {
+        let configs = {};
+        try { configs = JSON.parse(fs.readFileSync('./database/config.json', 'utf-8')); } catch(e) {}
+        configs[guildId] = { ...configs[guildId], ...novaConfig };
+        fs.writeFileSync('./database/config.json', JSON.stringify(configs, null, 2));
+        res.json({ message: 'Protocolos gravados com sucesso, operador.' });
+    } catch (e) {
+        console.error('[Config Save]', e);
+        res.status(500).json({ message: 'Erro ao gravar configurações.' });
+    }
+});
+
+app.post('/api/config/panic', requireLogin, async (req, res) => {
+    const { guildId } = req.body;
+    const temAcesso = req.session.guilds?.some(g => g.id === guildId);
+    if (!temAcesso) return res.status(403).json({ message: 'Sem permissão.' });
+    try {
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) return res.status(404).json({ message: 'Bot não está nesse servidor.' });
+        let travados = 0;
+        for (const [, canal] of guild.channels.cache.filter(c => c.type === 0)) {
+            try {
+                await canal.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+                travados++;
+            } catch (_) {}
+        }
+        res.json({ message: `🔒 Lockdown ativado. ${travados} canais travados.` });
+    } catch (e) {
+        console.error('[Panic]', e);
+        res.status(500).json({ message: 'Erro ao acionar lockdown.' });
+    }
+});
+
+app.get('/auth/logout', (req, res) => {
+    req.session.destroy();
+    res.redirect('/');
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.listen(port, () => {
+    console.log(`🌐 Servidor web na porta ${port}`);
+});
+
+// ============================================================
+//  TRAVAS DE SEGURANÇA
+// ============================================================
+process.emitWarning = () => {};
 process.env.NODE_NO_WARNINGS = '1';
 
-// Impede que erros de rede ou socket de voz derrubem o terminal
-process.on('unhandledRejection', (reason, promise) => {
-    if (reason?.message?.includes('IP discovery') || reason?.message?.includes('socket closed')) {
-        return; 
-    }
+process.on('unhandledRejection', (reason) => {
+    const msg = reason?.message || '';
+    if (msg.includes('IP discovery')) return;
+    if (msg.includes('socket closed')) return;
+    if (msg.includes('Invalid Form Body')) return;
+    if (msg.includes('Unknown interaction')) return;
+    if (msg.includes('Unknown Message')) return;
+    if (msg.includes('Missing Permissions')) return;
+    if (msg.includes('Cannot send messages')) return;
     console.error('⚠️ Rejeição não tratada:', reason);
 });
 
-process.on('uncaughtException', (err, origin) => {
-    if (err?.message?.includes('IP discovery') || err?.message?.includes('socket closed')) {
-        return;
-    }
+process.on('uncaughtException', (err) => {
+    if (err?.message?.includes('IP discovery') || err?.message?.includes('socket closed')) return;
     console.error('⚠️ Exceção não capturada:', err);
 });
-// ------------------------------------------------------------------
 
-const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+// ============================================================
+//  BOT DISCORD
+// ============================================================
+const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, PermissionsBitField } = require('discord.js');
+const { perguntarParaIA } = require("./gemini.js");
 
-// Ajustado para CommonJS para não quebrar com seus requires abaixo
-const { perguntarParaIA } = require("./gemini.js"); 
-
-const PREFIX = 'r!';
-const OWNER_ID = '1507543140800921610'; // ID PT
+const PREFIX   = 'd!';
+const OWNER_ID = '1507543140800921610';
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers,     
-        GatewayIntentBits.GuildVoiceStates  
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.GuildModeration
     ]
 });
 
 client.commands = new Collection();
-const floodMap = new Map(); 
-const deletarCanaisMap = new Map(); 
+const floodMap         = new Map();
+const deletarCanaisMap = new Map();
+const massBanMap       = new Map();
+const massKickMap      = new Map();
+const selfbotMap       = new Map();
 
-// --- CARREGADOR DE COMANDOS MECÂNICO ---
+// ── CARREGADOR DE COMANDOS ──
 const commandsPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(commandsPath);
-
 for (const folder of commandFolders) {
     const folderPath = path.join(commandsPath, folder);
-    const commandFiles = fs.readdirSync(folderPath).filter(file => file.endsWith('.js'));
+    const commandFiles = fs.readdirSync(folderPath).filter(f => f.endsWith('.js'));
     for (const file of commandFiles) {
         const filePath = path.join(folderPath, file);
-        const command = require(filePath);
+        const command  = require(filePath);
         if ('name' in command && 'execute' in command) {
-            
-            // 🟩 INJETOR DE CATEGORIA (Essencial para os botões do help funcionarem)
             command.category = folder.toLowerCase();
-            
             client.commands.set(command.name, command);
         }
     }
 }
 
-const palavrasProibidas = ["macaco", "crioulo", "viadinho", "infame", "verme", "traveco"]; 
+const palavrasProibidas = ["macaco", "crioulo", "viadinho", "infame", "verme", "traveco"];
 
-// --- ROTEAÇÃO AVANÇADA DE LOGS POR SERVIDOR ---
-async function enviarLog(guild, tipoLog, embed) {
+// ── HELPERS ──
+function getConfig(guildId) {
     try {
         const configs = JSON.parse(fs.readFileSync('./database/config.json', 'utf-8'));
-        const serverConfig = configs[guild.id];
-        if (!serverConfig) return;
+        return configs[guildId] || {};
+    } catch (e) { return {}; }
+}
 
-        const canalId = serverConfig[tipoLog];
+async function enviarLog(guild, tipoLog, embed) {
+    try {
+        const sc = getConfig(guild.id);
+        const canalId = sc[tipoLog];
         if (!canalId) return;
-
         const canalLog = guild.channels.cache.get(canalId);
         if (canalLog && canalLog.permissionsFor(guild.members.me).has('SendMessages')) {
             canalLog.send({ embeds: [embed] }).catch(() => {});
@@ -90,17 +255,45 @@ async function enviarLog(guild, tipoLog, embed) {
 }
 
 function registrarInfracao(guildId, userId, tipo, motivo) {
-    let dados = JSON.parse(fs.readFileSync('./database/punicoes.json', 'utf-8'));
-    if (!dados[guildId]) dados[guildId] = {};
-    if (!dados[guildId][userId]) dados[guildId][userId] = { warns: 0, mutes: 0, bans: 0, historico: [] };
-    dados[guildId][userId][tipo]++;
-    dados[guildId][userId].historico.push({
-        tipo: tipo.toUpperCase(), motivo: motivo, data: new Date().toLocaleDateString('pt-BR')
-    });
-    fs.writeFileSync('./database/punicoes.json', JSON.stringify(dados, null, 2));
+    try {
+        let dados = JSON.parse(fs.readFileSync('./database/punicoes.json', 'utf-8'));
+        if (!dados[guildId]) dados[guildId] = {};
+        if (!dados[guildId][userId]) dados[guildId][userId] = { warns: 0, mutes: 0, bans: 0, historico: [] };
+        dados[guildId][userId][tipo]++;
+        dados[guildId][userId].historico.push({
+            tipo: tipo.toUpperCase(), motivo, data: new Date().toLocaleDateString('pt-BR')
+        });
+        fs.writeFileSync('./database/punicoes.json', JSON.stringify(dados, null, 2));
+
+        // ── AUTO-BAN POR WARNS ──
+        const sc = getConfig(guildId);
+        if (tipo === 'warns' && sc.autoPunicaoWarns) {
+            const limite = parseInt(sc.autoPunicaoWarns) || 3;
+            if (dados[guildId][userId].warns >= limite) {
+                const guild = client.guilds.cache.get(guildId);
+                if (guild) {
+                    guild.members.ban(userId, { reason: `Reth Morgan: Auto-ban por ${limite} warns.` }).catch(() => {});
+                    dados[guildId][userId].warns = 0;
+                    fs.writeFileSync('./database/punicoes.json', JSON.stringify(dados, null, 2));
+                    const embed = new EmbedBuilder()
+                        .setColor('#f53b57').setTitle('🔨 AUTO-BAN: LIMITE DE WARNS ATINGIDO')
+                        .setDescription(`<@${userId}> foi banido automaticamente ao atingir ${limite} warns.`)
+                        .setTimestamp();
+                    enviarLog(guild, 'logs_seguranca', embed);
+                }
+            }
+        }
+    } catch (e) {}
 }
 
-// TIMEOUT CHECKER AUTOMÁTICO
+function isWhitelisted(sc, userId, guild) {
+    if (userId === OWNER_ID || userId === guild.ownerId) return true;
+    if (!sc.whitelistIds) return false;
+    const ids = sc.whitelistIds.split(',').map(s => s.trim());
+    return ids.includes(userId);
+}
+
+// ── TIMEOUT CHECKER ──
 setInterval(() => {
     try {
         let dados = JSON.parse(fs.readFileSync('./database/punicoes.json', 'utf-8'));
@@ -123,12 +316,36 @@ setInterval(() => {
     } catch (e) {}
 }, 10000);
 
-// --- EVENTO: REINICIALIZAÇÃO COM STATUS ROTATIVO DINÂMICO ---
+// ── LIMPEZA AGENDADA ──
+setInterval(() => {
+    try {
+        const configs = JSON.parse(fs.readFileSync('./database/config.json', 'utf-8'));
+        for (const guildId in configs) {
+            const sc = configs[guildId];
+            if (!sc.limpezaAgendada || !sc.horasLimpeza || !sc.logChannelId) continue;
+            const intervalo = parseInt(sc.horasLimpeza) * 60 * 60 * 1000;
+            const ultimaLimpeza = sc._ultimaLimpeza || 0;
+            if (Date.now() - ultimaLimpeza < intervalo) continue;
+
+            const guild = client.guilds.cache.get(guildId);
+            if (!guild) continue;
+            const canal = guild.channels.cache.get(sc.logChannelId);
+            if (!canal) continue;
+
+            canal.bulkDelete(100, true).catch(() => {});
+            configs[guildId]._ultimaLimpeza = Date.now();
+            fs.writeFileSync('./database/config.json', JSON.stringify(configs, null, 2));
+        }
+    } catch (e) {}
+}, 60000);
+
+// ── EVENTO: READY ──
 client.once('ready', () => {
-    console.clear(); 
+    console.clear();
     console.log('==================================================');
     console.log(`🛡️   RETH MORGAN SHIELD SYSTEM V8 ONLINE`);
     console.log(`🔗 Logado como: ${client.user.tag}`);
+    console.log(`🌐 Painel web: http://localhost:${port}`);
     console.log('==================================================');
 
     const statusList = [
@@ -136,122 +353,102 @@ client.once('ready', () => {
         { name: `Segurança Máxima em ${client.guilds.cache.size} servidores! 🏢`, type: 0 },
         { name: 'Protocolo Anti-Nuke Ativo ☢️', type: 2 },
         { name: 'Desenvolvido por PT 👑', type: 0 },
-        { name: 'RETH MORGAN: Executando o caos. Codificando a ordem."', type: 2 },
-        { name: 'Use r!help para ver meus comandos 🚀', type: 0 }
+        { name: 'RETH MORGAN: Executando o caos. Codificando a ordem.', type: 2 },
+        { name: 'Use d!help para ver meus comandos 🚀', type: 0 }
     ];
-
-    let index = 0;
+    let idx = 0;
     setInterval(() => {
-        const currentStatus = statusList[index];
-        client.user.setPresence({
-            activities: [{ name: currentStatus.name, type: currentStatus.type }],
-            status: 'dnd' 
-        });
-        index = (index + 1) % statusList.length;
+        const s = statusList[idx];
+        client.user.setPresence({ activities: [{ name: s.name, type: s.type }], status: 'dnd' });
+        idx = (idx + 1) % statusList.length;
     }, 15000);
 });
 
-// --- EVENTO CENTRAL: ENTRADA DE MEMBROS ---
-client.on('guildMemberAdd', async (member) => {
-    const guild = member.guild;
-    let configs = {};
+// ── ANTI-CARGOS ──
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
     try {
-        configs = JSON.parse(fs.readFileSync('./database/config.json', 'utf-8'));
-    } catch (e) { return; }
-    
-    const serverConfig = configs[guild.id] || {};
+        const sc = getConfig(newMember.guild.id);
+        if (!sc.anticargos) return;
+        if (!sc.cargos_protegidos || sc.cargos_protegidos.length === 0) return;
 
-    // 1. AUTO-ROLE AUTOMÁTICO
-    if (serverConfig.autorole) {
-        const cargoAlvo = guild.roles.cache.get(serverConfig.autorole);
-        if (cargoAlvo) await member.roles.add(cargoAlvo).catch(() => {});
-    }
+        const cargoAdicionado = newMember.roles.cache.find(
+            r => sc.cargos_protegidos.includes(r.id) && !oldMember.roles.cache.has(r.id)
+        );
+        if (!cargoAdicionado) return;
 
-    // 2. MENSAGEM DE BOAS-VINDAS PÚBLICA
-    if (serverConfig.msg_join) {
-        const canalPublico = guild.channels.cache.get(serverConfig.msg_join);
-        if (canalPublico) {
-            canalPublico.send(`👋 Bem-vindo(a) <@${member.id}> ao servidor **${guild.name}**! Aproveite o chat!`).catch(() => {});
-        }
-    }
-
-    // 3. LOGS DE ENTRADA INDEPENDENTE (LOG-JOIN)
-    if (serverConfig.logs_join) {
-        const joinEmbed = new EmbedBuilder()
-            .setColor('#2ecc71')
-            .setAuthor({ name: `${member.user.tag} entrou`, iconURL: member.user.displayAvatarURL() })
-            .setDescription(`• Conta criada em: <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>\n• ID do Usuário: \`${member.id}\``)
-            .setTimestamp();
-        enviarLog(guild, 'logs_join', joinEmbed);
-    }
-
-    // 4. BANIMENTO DE BOTS INVASORES E PUNÇÃO DE CHAVAL QUE INJETOU
-    if (member.user.bot && serverConfig.antibot) {
+        let executor = null;
         try {
-            await new Promise(res => setTimeout(res, 1000));
-            const logsAuditoria = await guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.BotAdd }); 
-            const logAdicao = logsAuditoria.entries.first();
-            
-            if (logAdicao) {
-                const executor = logAdicao.executor;
-                if (executor.id === OWNER_ID || executor.id === guild.ownerId) return;
+            const logs = await newMember.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberRoleUpdate });
+            const entry = logs.entries.first();
+            if (entry && Date.now() - entry.createdTimestamp < 5000) executor = entry.executor;
+        } catch {}
 
-                await member.ban({ reason: 'Reth Morgan: Entrada de bots não autorizada pelo Proprietário.' }).catch(() => {});
-                
-                const staffer = await guild.members.fetch(executor.id).catch(() => {});
-                if (staffer) {
-                    await staffer.ban({ reason: 'Reth Morgan Anti-Raid: Autor de injeção ilícita de bot invasor.' }).catch(() => {
-                        const cargosRemoviveis = staffer.roles.cache.filter(r => r.id !== guild.id && !r.managed);
-                        staffer.roles.remove(cargosRemoviveis).catch(() => {});
-                    });
-                }
+        if (isWhitelisted(sc, executor?.id, newMember.guild)) return;
+        await newMember.roles.remove(cargoAdicionado, 'Reth Morgan Anti-Cargos').catch(() => {});
 
-                const logBotEmbed = new EmbedBuilder()
-                    .setColor('#f53b57')
-                    .setTitle('🚨 ALERTA GERAL: ATAQUE DE BOT REPELIDO')
-                    .setDescription(`O administrador <@${executor.id}> quebrou as regras e tentou injetar um bot no servidor.`)
-                    .addFields(
-                        { name: '🤖 Bot Invasor Eliminado', value: `\`${member.user.tag}\` (${member.id})`, inline: true },
-                        { name: '🔨 Punição ao Infrator', value: `\`Banido do Servidor / Permissões Cassadas\``, inline: true }
-                    )
-                    .setTimestamp();
-                
-                return enviarLog(guild, 'logs_seguranca', logBotEmbed);
-            }
-        } catch (error) {}
-    }
+        const logEmbed = new EmbedBuilder()
+            .setColor('#f39c12').setTitle('🔰 ANTI-CARGOS — TENTATIVA BLOQUEADA')
+            .setDescription('Uma tentativa de atribuir um cargo protegido foi interceptada e revertida.')
+            .addFields(
+                { name: '🎯 Cargo Bloqueado', value: `<@&${cargoAdicionado.id}> (\`${cargoAdicionado.name}\`)`, inline: true },
+                { name: '👤 Alvo da Ação',    value: `<@${newMember.id}> (\`${newMember.user.tag}\`)`, inline: true },
+                { name: '🕵️ Executor',        value: executor ? `<@${executor.id}> (\`${executor.tag}\`)` : '`Não identificado`', inline: true }
+            ).setTimestamp();
 
-    // 5. ANTI-CONTA FAKE
-    if (serverConfig.antifake && !member.user.bot) {
-        const contaCriadaHa = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24); 
-        const limiteDias = serverConfig.diasFake || 7;
-
-        if (contaCriadaHa < limiteDias) {
-            await member.kick(`Reth Morgan System: Conta menor que ${limiteDias} dias.`).catch(() => {});
-            
-            const logFakeEmbed = new EmbedBuilder()
-                .setColor('#f53b57')
-                .setTitle('🚨 SEGURANÇA: CONTA FAKE EXPULSADA')
-                .setDescription(`A conta suspeita **${member.user.tag}** foi removida por não atingir a idade mínima.`)
-                .addFields(
-                    { name: '⏳ Idade da Conta', value: `\`${Math.floor(contaCriadaHa)} dias\``, inline: true },
-                    { name: '🔒 Mínimo Exigido', value: `\`${limiteDias} dias\``, inline: true }
-                )
-                .setTimestamp();
-
-            return enviarLog(guild, 'logs_seguranca', logFakeEmbed);
-        }
-    }
+        const enviarParaCanal = async (canalId) => {
+            if (!canalId) return;
+            const canal = newMember.guild.channels.cache.get(canalId);
+            if (canal && canal.permissionsFor(newMember.guild.members.me)?.has('SendMessages'))
+                await canal.send({ embeds: [logEmbed] }).catch(() => {});
+        };
+        await enviarParaCanal(sc.logs_anticargos);
+        if (sc.logs_anticargos !== sc.logs_seguranca) await enviarParaCanal(sc.logs_seguranca);
+    } catch (e) { console.error('[anti-cargos]', e.message); }
 });
 
-// --- EVENTO: SAÍDA DE MEMBROS (LOGS_JOIN) ---
+// ── ANTI-MASS BAN ──
+client.on('guildBanAdd', async (ban) => {
+    try {
+        const sc = getConfig(ban.guild.id);
+        if (!sc.antiMassBan) return;
+        const limite = parseInt(sc.maxBans) || 5;
+
+        const logs = await ban.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberBanAdd });
+        const entry = logs.entries.first();
+        if (!entry) return;
+        const executor = entry.executor;
+        if (isWhitelisted(sc, executor.id, ban.guild)) return;
+
+        const agora = Date.now();
+        if (!massBanMap.has(executor.id)) massBanMap.set(executor.id, []);
+        const ts = massBanMap.get(executor.id).filter(t => agora - t < 60000);
+        ts.push(agora);
+        massBanMap.set(executor.id, ts);
+
+        if (ts.length >= limite) {
+            const member = await ban.guild.members.fetch(executor.id).catch(() => {});
+            if (member) {
+                const cargosRem = member.roles.cache.filter(r => r.id !== ban.guild.id && !r.managed);
+                await member.roles.remove(cargosRem).catch(() => {});
+                await member.timeout(1000 * 60 * 60, 'Reth Morgan: Anti-Mass Ban').catch(() => {});
+            }
+            const embed = new EmbedBuilder()
+                .setColor('#f53b57').setTitle('🚨 ANTI-MASS BAN ACIONADO')
+                .setDescription(`<@${executor.id}> efetuou ${ts.length} bans em 1 minuto. Privilégios suspensos.`)
+                .setTimestamp();
+            enviarLog(ban.guild, 'logs_seguranca', embed);
+            massBanMap.set(executor.id, []);
+        }
+    } catch (e) {}
+});
+
+// ── ANTI-MASS KICK ──
 client.on('guildMemberRemove', async (member) => {
     const guild = member.guild;
-    let configs = {};
-    try { configs = JSON.parse(fs.readFileSync('./database/config.json', 'utf-8')); } catch (e) { return; }
-    
-    const serverConfig = configs[guild.id] || {};
-    if (serverConfig.logs_join) {
+    const sc = getConfig(guild.id);
+
+    // Log de saída
+    if (sc.logs_join) {
         const leaveEmbed = new EmbedBuilder()
             .setColor('#e74c3c')
             .setAuthor({ name: `${member.user.tag} saiu`, iconURL: member.user.displayAvatarURL() })
@@ -259,280 +456,458 @@ client.on('guildMemberRemove', async (member) => {
             .setTimestamp();
         enviarLog(guild, 'logs_join', leaveEmbed);
     }
+
+    // Anti-Mass Kick
+    if (!sc.antiMassKick) return;
+    try {
+        const limite = parseInt(sc.maxKicks) || 5;
+        const logs = await guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberKick });
+        const entry = logs.entries.first();
+        if (!entry || Date.now() - entry.createdTimestamp > 5000) return;
+        const executor = entry.executor;
+        if (isWhitelisted(sc, executor.id, guild)) return;
+
+        const agora = Date.now();
+        if (!massKickMap.has(executor.id)) massKickMap.set(executor.id, []);
+        const ts = massKickMap.get(executor.id).filter(t => agora - t < 60000);
+        ts.push(agora);
+        massKickMap.set(executor.id, ts);
+
+        if (ts.length >= limite) {
+            const exec = await guild.members.fetch(executor.id).catch(() => {});
+            if (exec) {
+                const cargosRem = exec.roles.cache.filter(r => r.id !== guild.id && !r.managed);
+                await exec.roles.remove(cargosRem).catch(() => {});
+                await exec.timeout(1000 * 60 * 60, 'Reth Morgan: Anti-Mass Kick').catch(() => {});
+            }
+            const embed = new EmbedBuilder()
+                .setColor('#f53b57').setTitle('🚨 ANTI-MASS KICK ACIONADO')
+                .setDescription(`<@${executor.id}> efetuou ${ts.length} kicks em 1 minuto. Privilégios suspensos.`)
+                .setTimestamp();
+            enviarLog(guild, 'logs_seguranca', embed);
+            massKickMap.set(executor.id, []);
+        }
+    } catch (e) {}
 });
 
-// --- ANTI-MASS CHANNEL DELETE (ANTI-NUKE) ---
+// ── ENTRADA DE MEMBROS ──
+client.on('guildMemberAdd', async (member) => {
+    const guild = member.guild;
+    const sc = getConfig(guild.id);
+
+    // Auto-role
+    if (sc.autorole) {
+        const cargoAlvo = guild.roles.cache.get(sc.autorole);
+        if (cargoAlvo) await member.roles.add(cargoAlvo).catch(() => {});
+    }
+
+    // Mensagem de boas-vindas
+    if (sc.msg_join) {
+        const canalPublico = guild.channels.cache.get(sc.msg_join);
+        if (canalPublico) canalPublico.send(`👋 Bem-vindo(a) <@${member.id}> ao servidor **${guild.name}**! Aproveite o chat!`).catch(() => {});
+    }
+
+    // Log de entrada
+    if (sc.logs_join) {
+        const joinEmbed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setAuthor({ name: `${member.user.tag} entrou`, iconURL: member.user.displayAvatarURL() })
+            .setDescription(`• Conta criada em: <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>\n• ID: \`${member.id}\``)
+            .setTimestamp();
+        enviarLog(guild, 'logs_join', joinEmbed);
+    }
+
+    // Anti-bot
+    if (member.user.bot && (sc.antibot || sc.bloqueioBots)) {
+        try {
+            await new Promise(r => setTimeout(r, 1000));
+            const logsAuditoria = await guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.BotAdd });
+            const logAdicao = logsAuditoria.entries.first();
+            if (logAdicao) {
+                const executor = logAdicao.executor;
+                if (isWhitelisted(sc, executor.id, guild)) return;
+                await member.ban({ reason: 'Reth Morgan: Entrada de bot não autorizada.' }).catch(() => {});
+                const staffer = await guild.members.fetch(executor.id).catch(() => {});
+                if (staffer) {
+                    await staffer.ban({ reason: 'Reth Morgan Anti-Raid: Injeção ilícita de bot.' }).catch(() => {
+                        const cargosRemoviveis = staffer.roles.cache.filter(r => r.id !== guild.id && !r.managed);
+                        staffer.roles.remove(cargosRemoviveis).catch(() => {});
+                    });
+                }
+                const logBotEmbed = new EmbedBuilder()
+                    .setColor('#f53b57').setTitle('🚨 ALERTA: ATAQUE DE BOT REPELIDO')
+                    .setDescription(`<@${executor.id}> tentou injetar um bot no servidor.`)
+                    .addFields(
+                        { name: '🤖 Bot Invasor', value: `\`${member.user.tag}\` (${member.id})`, inline: true },
+                        { name: '🔨 Punição', value: '`Banido / Permissões Cassadas`', inline: true }
+                    ).setTimestamp();
+                enviarLog(guild, 'logs_seguranca', logBotEmbed);
+            }
+        } catch (e) {}
+        return;
+    }
+
+    // Anti-fake
+    if (sc.antifake && !member.user.bot) {
+        const contaCriadaHa = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
+        const limiteDias = parseInt(sc.diasFake) || 7;
+        if (contaCriadaHa < limiteDias) {
+            const msg = sc.customPunishMsg || `Reth Morgan: Conta menor que ${limiteDias} dias.`;
+            await member.kick(msg).catch(() => {});
+            const logFakeEmbed = new EmbedBuilder()
+                .setColor('#f53b57').setTitle('🚨 SEGURANÇA: CONTA FAKE EXPULSADA')
+                .setDescription(`**${member.user.tag}** removido por não atingir a idade mínima.`)
+                .addFields(
+                    { name: '⏳ Idade da Conta', value: `\`${Math.floor(contaCriadaHa)} dias\``, inline: true },
+                    { name: '🔒 Mínimo Exigido',  value: `\`${limiteDias} dias\``, inline: true }
+                ).setTimestamp();
+            enviarLog(guild, 'logs_seguranca', logFakeEmbed);
+        }
+    }
+
+    // Auto-mod de nomes
+    if (sc.autoModNomes && !member.user.bot) {
+        const nick = member.displayName;
+        const temInvisivel = /[\u200b\u200c\u200d\u0000-\u001f\u007f-\u009f]/.test(nick);
+        const temAbusivo   = /^[^a-zA-Z0-9À-ÿ\s]{5,}/.test(nick);
+        if (temInvisivel || temAbusivo) {
+            await member.setNickname('Usuário', 'Reth Morgan: Nick inválido').catch(() => {});
+        }
+    }
+});
+
+// ── ANTI-NUKE: EXCLUSÃO DE CANAIS ──
 client.on('channelDelete', async (channel) => {
     const guild = channel.guild;
-    let configs = {}; try { configs = JSON.parse(fs.readFileSync('./database/config.json', 'utf-8')); } catch (e) { return; }
-    const serverConfig = configs[guild.id] || {};
-
-    if (!serverConfig.antinuke) return;
-
+    const sc = getConfig(guild.id);
+    if (!sc.antinuke) return;
     try {
         const auditLogs = await guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.ChannelDelete });
         const entry = auditLogs.entries.first();
         if (!entry) return;
-
         const executor = entry.executor;
-        if (executor.id === OWNER_ID || executor.id === guild.ownerId || executor.id === client.user.id) return;
+        if (isWhitelisted(sc, executor.id, guild) || executor.id === client.user.id) return;
 
         const agora = Date.now();
         if (!deletarCanaisMap.has(executor.id)) deletarCanaisMap.set(executor.id, []);
-        
-        const timestamps = deletarCanaisMap.get(executor.id);
+        const timestamps = deletarCanaisMap.get(executor.id).filter(t => agora - t < 10000);
         timestamps.push(agora);
-        
-        const exclusoesRecentes = timestamps.filter(time => agora - time < 10000);
-        deletarCanaisMap.set(executor.id, exclusoesRecentes);
+        deletarCanaisMap.set(executor.id, timestamps);
 
-        if (exclusoesRecentes.length >= 3) {
+        if (timestamps.length >= 3) {
             const member = await guild.members.fetch(executor.id).catch(() => {});
             if (member) {
-                const cargosRemoviveis = member.roles.cache.filter(role => role.id !== guild.id && role.managed === false);
+                const cargosRemoviveis = member.roles.cache.filter(r => r.id !== guild.id && !r.managed);
                 await member.roles.remove(cargosRemoviveis).catch(() => {});
+                await member.timeout(1000 * 60 * 60 * 24, 'Reth Morgan: Anti-Nuke').catch(() => {});
             }
-
             const embedAlerta = new EmbedBuilder()
-                .setColor('#f53b57')
-                .setTitle('🚨 ANTI-NUKE ACIONADO: PROTEÇÃO DE CANAIS')
-                .setDescription(`O staffer <@${executor.id}> tentou deletar múltiplos canais. Privilégios revogados.`)
+                .setColor('#f53b57').setTitle('🚨 ANTI-NUKE ACIONADO: PROTEÇÃO DE CANAIS')
+                .setDescription(`<@${executor.id}> tentou deletar múltiplos canais. Privilégios revogados.`)
                 .setTimestamp();
             enviarLog(guild, 'logs_seguranca', embedAlerta);
         }
-    } catch (err) {}
+    } catch (e) {}
 });
 
-// --- SISTEMA INTEGRAÇÃO COM MENSAGENS (COMANDOS & IA DE DEFESA) ---
+// ── EVENTO CENTRAL: MENSAGENS ──
 client.on('messageCreate', async (message) => {
-    if (message.author.bot || !message.guild) return;
+    if (!message.guild || message.author.bot || message.webhookId) return;
+    if (message.author.id === client.user?.id) return;
 
-    // Sistema de Filtro de Palavras Proibidas básico existente
-    const contemPalavraProibida = palavrasProibidas.some(palavra => message.content.toLowerCase().includes(palavra));
-    if (contemPalavraProibida) {
-        await message.delete().catch(() => {});
-        return message.channel.send(`⚠️ <@${message.author.id}>, mantenha o chat limpo e evite termos ofensivos!`);
+    let data = { canaisComandos: [] };
+    try {
+        if (fs.existsSync('./database/canais.json')) {
+            const parsed = JSON.parse(fs.readFileSync('./database/canais.json', 'utf8'));
+            if (parsed) data = parsed;
+        }
+    } catch (e) {}
+    if (!data.canaisComandos) data.canaisComandos = [];
+
+    const sc = getConfig(message.guild.id);
+    const canalPermitido = data.canaisComandos.length === 0 || data.canaisComandos.includes(message.channel.id);
+    const temPermissao = message.member?.permissions.has(PermissionsBitField.Flags.ManageMessages);
+    const ehDono = message.author.id === OWNER_ID;
+
+    // ── ANTI-FLOOD ──
+    if (sc.antiflood && !temPermissao) {
+        const limite = parseInt(sc.limiteFlood) || 5;
+        const agora = Date.now();
+        const userId = message.author.id;
+        if (!floodMap.has(userId)) floodMap.set(userId, []);
+        const msgs = floodMap.get(userId).filter(t => agora - t < 4000);
+        msgs.push(agora);
+        floodMap.set(userId, msgs);
+        if (msgs.length >= limite) {
+            await message.delete().catch(() => {});
+            const aviso = await message.channel.send(`⚠️ <@${message.author.id}>, você está enviando mensagens muito rápido!`).catch(() => {});
+            if (aviso) setTimeout(() => aviso.delete().catch(() => {}), 5000);
+            return;
+        }
     }
 
-    // Execução normal de comandos com prefixo (Ex: r!help)
-    if (message.content.startsWith(PREFIX)) {
+    // ── ANTI-LINK ──
+    if (sc.antilink && !temPermissao) {
+        // Verifica domínios banidos ou qualquer link
+        const temLink = /https?:\/\/[^\s]+/.test(message.content);
+        if (temLink) {
+            const dominiosBanidos = sc.filtroLinks
+                ? sc.filtroLinks.split(',').map(d => d.trim()).filter(Boolean)
+                : [];
+            const deveBloquear = dominiosBanidos.length === 0
+                ? true
+                : dominiosBanidos.some(d => message.content.includes(d));
+            if (deveBloquear) {
+                await message.delete().catch(() => {});
+                const msg = sc.customPunishMsg || `🔗 <@${message.author.id}>, links não são permitidos!`;
+                const aviso = await message.channel.send(msg).catch(() => {});
+                if (aviso) setTimeout(() => aviso.delete().catch(() => {}), 5000);
+                return;
+            }
+        }
+    }
+
+    // ── ANTI-INVITE ──
+    if (sc.antiinvite && !temPermissao) {
+        if (/(discord\.gg|discord\.com\/invite)\/[^\s]+/i.test(message.content)) {
+            await message.delete().catch(() => {});
+            const msg = sc.customPunishMsg || `📩 <@${message.author.id}>, convites não são permitidos!`;
+            const aviso = await message.channel.send(msg).catch(() => {});
+            if (aviso) setTimeout(() => aviso.delete().catch(() => {}), 5000);
+            return;
+        }
+    }
+
+    // ── ANTI-CAPS ──
+    if ((sc.anticaps || sc.antiCapsLock) && message.content.length > 10 && !temPermissao) {
+        const maiusculas = message.content.replace(/[^A-Z]/g, '').length;
+        const total = message.content.replace(/[^a-zA-Z]/g, '').length;
+        if (total > 0 && (maiusculas / total) > 0.7) {
+            await message.delete().catch(() => {});
+            const aviso = await message.channel.send(`🔠 <@${message.author.id}>, evite CAPS LOCK em excesso!`).catch(() => {});
+            if (aviso) setTimeout(() => aviso.delete().catch(() => {}), 5000);
+            return;
+        }
+    }
+
+    // ── ANTI-PRECONCEITO ──
+    if (sc.antipreconceito && !temPermissao) {
+        if (palavrasProibidas.some(p => message.content.toLowerCase().includes(p))) {
+            await message.delete().catch(() => {});
+            const msg = sc.customPunishMsg || `⚠️ <@${message.author.id}>, mantenha o chat limpo!`;
+            const aviso = await message.channel.send(msg).catch(() => {});
+            if (aviso) setTimeout(() => aviso.delete().catch(() => {}), 5000);
+            registrarInfracao(message.guild.id, message.author.id, 'warns', 'Discurso de ódio');
+            return;
+        }
+    }
+
+    // ── ANTI-SPOILER ──
+    if (sc.antiSpoiler && !temPermissao) {
+        const spoilers = message.content.match(/\|\|[^|]+\|\|/g) || [];
+        if (spoilers.length > 3) {
+            await message.delete().catch(() => {});
+            const aviso = await message.channel.send(`🙈 <@${message.author.id}>, uso excessivo de spoilers!`).catch(() => {});
+            if (aviso) setTimeout(() => aviso.delete().catch(() => {}), 5000);
+            return;
+        }
+    }
+
+    // ── FILTRO DE EMOJIS ──
+    if (sc.filtroEmojis && !temPermissao) {
+        const maxEmojis = parseInt(sc.maxEmojis) || 10;
+        const emojiCount = (message.content.match(/<a?:\w+:\d+>|[\u{1F300}-\u{1FAFF}]/gu) || []).length;
+        if (emojiCount > maxEmojis) {
+            await message.delete().catch(() => {});
+            const aviso = await message.channel.send(`😅 <@${message.author.id}>, muitos emojis! Máximo: ${maxEmojis}`).catch(() => {});
+            if (aviso) setTimeout(() => aviso.delete().catch(() => {}), 5000);
+            return;
+        }
+    }
+
+    // ── LIMITE DE MENÇÕES ──
+    if (sc.limiteMencoes && !temPermissao) {
+        const limite = parseInt(sc.limiteMencoes) || 5;
+        const mencoes = message.mentions.users.size + message.mentions.roles.size;
+        if (mencoes > limite) {
+            await message.delete().catch(() => {});
+            const aviso = await message.channel.send(`🔇 <@${message.author.id}>, muitas menções! Máximo: ${limite}`).catch(() => {});
+            if (aviso) setTimeout(() => aviso.delete().catch(() => {}), 5000);
+            registrarInfracao(message.guild.id, message.author.id, 'warns', 'Menções em massa');
+            return;
+        }
+    }
+
+    // ── AUTO-MOD DE NOMES (verificação por mensagem) ──
+    if (sc.autoModNomes && message.member && !message.member.user.bot) {
+        const nick = message.member.displayName;
+        const temInvisivel = /[\u200b\u200c\u200d\u0000-\u001f]/.test(nick);
+        if (temInvisivel) {
+            await message.member.setNickname('Usuário', 'Reth Morgan: Nick com caracteres inválidos').catch(() => {});
+        }
+    }
+
+    // ── DETECTOR DE SELFBOTS ──
+    if (sc.detectorSelfbots && !temPermissao) {
+        const userId = message.author.id;
+        const agora = Date.now();
+        if (!selfbotMap.has(userId)) selfbotMap.set(userId, { msgs: [], identical: 0, lastMsg: '' });
+        const dados = selfbotMap.get(userId);
+        dados.msgs = dados.msgs.filter(t => agora - t < 5000);
+        dados.msgs.push(agora);
+        if (message.content === dados.lastMsg) dados.identical++;
+        else { dados.identical = 0; dados.lastMsg = message.content; }
+
+        // Suspeito: +10 msgs em 5s OU 5 msgs idênticas seguidas
+        if (dados.msgs.length >= 10 || dados.identical >= 5) {
+            await message.member.timeout(1000 * 60 * 30, 'Reth Morgan: Comportamento suspeito de selfbot').catch(() => {});
+            selfbotMap.delete(userId);
+            const embed = new EmbedBuilder()
+                .setColor('#f39c12').setTitle('🤖 DETECTOR DE SELFBOT ACIONADO')
+                .setDescription(`<@${userId}> apresentou padrão suspeito e foi silenciado por 30 min.`)
+                .setTimestamp();
+            enviarLog(message.guild, 'logs_seguranca', embed);
+            return;
+        }
+    }
+
+    // ── COMANDOS ──
+    if (canalPermitido && message.content.startsWith(PREFIX)) {
         const args = message.content.slice(PREFIX.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
-
-        const command = client.commands.get(commandName);
+        const command = client.commands.get(commandName)
+            || client.commands.find(cmd => cmd.aliases && cmd.aliases.includes(commandName));
         if (command) {
-            try {
-                await command.execute(message, args, client);
-            } catch (error) {
+            try { await command.execute(message, args, client, OWNER_ID); }
+            catch (error) {
                 console.error(error);
-                message.reply('❌ Ocorreu um erro ao tentar executar esse comando!');
+                message.reply('❌ Ocorreu um erro ao executar esse comando!');
             }
             return;
         }
     }
 
-// 🤖 CHAT DA IA: Defesa Inteligente, Criação de Comandos, Limpeza de Chat e Interação (Rápida e Direta)
-const ehO_Dono = message.author.id === OWNER_ID;
-const contemMorgan = message.content.toLowerCase().includes('morgan');
-const comecaComMorgan = message.content.toLowerCase().trim().startsWith('morgan');
-const marcouOBot = message.mentions.has(client.user);
+    // ── IA: RETH MORGAN ──
+    const morganAtiva = sc.morgan_ativo === true;
+    const canalMorgan = sc.morgan_canal || null;
 
-// O dono só precisa citar "morgan" em qualquer lugar da frase. Outros precisam marcar ou começar com o nome.
-const deveAtivarIA = marcouOBot || comecaComMorgan || (ehO_Dono && contemMorgan);
+    if (!morganAtiva && !ehDono) return;
 
-if (deveAtivarIA) {
+    const contemMorgan    = message.content.toLowerCase().includes('morgan');
+    const comecaComMorgan = message.content.toLowerCase().trim().startsWith('morgan');
+    const marcouOBot      = message.mentions.has(client.user);
+    const noCanaldaMorgan = canalMorgan && message.channel.id === canalMorgan;
+
+    const deveAtivarIA = marcouOBot || comecaComMorgan || noCanaldaMorgan || (ehDono && contemMorgan);
+    if (!deveAtivarIA) return;
+
     try {
         let perguntaLimpa = message.content;
-        
-        // Remove a menção do bot se ela existir
-        if (marcouOBot) {
-            perguntaLimpa = perguntaLimpa.split('<@' + client.user.id + '>').join('');
-        }
-        
-        // Remove a palavra "morgan" de onde quer que ela esteja na frase para mandar a pergunta limpa para a IA
+        if (marcouOBot) perguntaLimpa = perguntaLimpa.split('<@' + client.user.id + '>').join('');
         const textoMinusculo = perguntaLimpa.toLowerCase();
         const posicaoMorgan = textoMinusculo.indexOf('morgan');
-        if (posicaoMorgan !== -1) {
-            perguntaLimpa = perguntaLimpa.slice(0, posicaoMorgan) + perguntaLimpa.slice(posicaoMorgan + 6);
-        }
-        
+        if (posicaoMorgan !== -1) perguntaLimpa = perguntaLimpa.slice(0, posicaoMorgan) + perguntaLimpa.slice(posicaoMorgan + 6);
         perguntaLimpa = perguntaLimpa.trim();
-        if (perguntaLimpa.startsWith(',')) {
-            perguntaLimpa = perguntaLimpa.slice(1).trim();
-        }
+        if (perguntaLimpa.startsWith(',')) perguntaLimpa = perguntaLimpa.slice(1).trim();
 
-        if (!perguntaLimpa) {
-            return message.reply("Opa! Como posso te ajudar com o servidor hoje? Só falar.");
-        }
+        if (!perguntaLimpa) return message.reply(`Olá, ${message.author.username}! Sou o Reth Morgan. Como posso ajudar? ⚙️`);
 
-        // Mostra o efeito visual de "A digitar..." no Discord
         await message.channel.sendTyping();
 
-        // Diretrizes totalmente reformuladas: adicionamos a ação "clear" de forma muito simples
         const diretrizesIA = `Você é a Reth Morgan, assistente pessoal de desenvolvimento e segurança do PT.
-Sua personalidade é extremamente direta, rápida, sem enrolação e sem palavras difíceis. Fale de forma simples e prática.
+Sua personalidade é extremamente direta, rápida, sem enrolação e sem palavras difíceis.
 
 CONDIÇÃO DE SEGURANÇA:
-Quem está falando com você agora é o seu criador (PT)? Resposta: ${ehO_Dono ? "SIM, É O PT." : "NÃO, É UM USUÁRIO COMUM."}
+Quem está falando com você agora é o seu criador (PT)? Resposta: ${ehDono ? "SIM, É O PT." : "NÃO, É UM USUÁRIO COMUM."}
 
 Se o PT (e APENAS o PT) te der uma ordem direta, você pode executar três ações especiais respondendo rigorosamente em formato JSON simples:
 
-1. ORDEM DE BANIMENTO: (Requer menção real do usuário)
-{
-  "acao": "ban",
-  "alvo": "ID_OU_MENCAO_DO_ALVO",
-  "motivo": "Motivo deduzido",
-  "resposta_chat": "Pronto, PT. Usuário banido com sucesso."
-}
+1. ORDEM DE BANIMENTO:
+{ "acao": "ban", "alvo": "ID_OU_MENCAO_DO_ALVO", "motivo": "Motivo deduzido", "resposta_chat": "Pronto, PT. Usuário banido." }
 
-2. ORDEM DE LIMPAR CHAT (CLEAR): (Ex: "morgan, apaga o chat", "morgan limpa 50 mensagens")
-Deduza a quantidade de mensagens que o PT quer apagar (padrão é 100 se ele pedir para "limpar tudo" ou "apagar o chat todo"). Limite máximo de 100 por vez.
-{
-  "acao": "clear",
-  "quantidade": 100,
-  "resposta_chat": "Chat limpo com sucesso, PT!"
-}
+2. ORDEM DE LIMPAR CHAT:
+{ "acao": "clear", "quantidade": 100, "resposta_chat": "Chat limpo com sucesso, PT!" }
 
-3. ORDEM DE CRIAR COMANDO: (Ex: "morgan, crie um comando chamado ping que responda pong")
-ATENÇÃO: Sempre use 'EmbedBuilder' importado de 'discord.js' para criar embeds no Discord.js v14. Nunca use 'MessageEmbed'.
-Se for essa ordem de criar comando, responda usando estritamente esta estrutura de tags de texto simples em vez de JSON:
-
+3. ORDEM DE CRIAR COMANDO:
 [CRIAR_COMANDO]
 <nome_arquivo>nome_do_comando.js</nome_arquivo>
 <categoria_pasta>utilitarios</categoria_pasta>
-<resposta_chat>Comando criado e ativado com sucesso, PT!</resposta_chat>
+<resposta_chat>Comando criado e ativado, PT!</resposta_chat>
 <codigo_js>
 const { EmbedBuilder } = require('discord.js');
-
-module.exports = {
-    name: 'nome_do_comando',
-    execute(message, args, client) {
-        // Código JavaScript limpo e direto aqui
-    }
-};
+module.exports = { name: 'nome', execute(message, args, client) { } };
 </codigo_js>
 
-Se quem falou NÃO for o PT, ou for apenas uma conversa comum, responda de forma muito curta, direta e simples, sem usar palavras difíceis.`;
+Se quem falou NÃO for o PT, responda de forma curta e direta.`;
 
         const respostaIA = await perguntarParaIA(perguntaLimpa, diretrizesIA);
         let textoResposta = respostaIA.trim();
-        
-        // Limpa blocos de formatação markdown se a IA os colocar por teimosia (Sem expressões regulares)
-        const crasesMarkdown = '`' + '`' + '`'; 
+
+        const crasesMarkdown = '\`\`\`';
         if (textoResposta.startsWith(crasesMarkdown)) {
             textoResposta = textoResposta.slice(3).trim();
-            if (textoResposta.toLowerCase().startsWith('json')) {
-                textoResposta = textoResposta.slice(4).trim();
-            }
-            if (textoResposta.endsWith(crasesMarkdown)) {
-                textoResposta = textoResposta.slice(0, -3).trim();
-            }
+            if (textoResposta.toLowerCase().startsWith('json')) textoResposta = textoResposta.slice(4).trim();
+            if (textoResposta.endsWith(crasesMarkdown)) textoResposta = textoResposta.slice(0, -3).trim();
         }
 
-        // 🛡️ SISTEMA DE CAPTURA 1: ORDENS EM JSON (Banimento e Clear)
         if (textoResposta.startsWith('{') && textoResposta.includes('"acao"')) {
             try {
                 const ordem = JSON.parse(textoResposta);
-
-                // --- FUNÇÃO: BANIMENTO ---
-                if (ordem.acao === 'ban' && ehO_Dono) {
+                if (ordem.acao === 'ban' && ehDono) {
                     const membroAlvo = message.mentions.members.first();
-                    if (!membroAlvo) {
-                        return message.reply("⚠️ **Erro:** Você precisa marcar (@) quem quer banir.");
-                    }
-                    if (membroAlvo.id === OWNER_ID) {
-                        return message.reply("⚠️ Não posso banir você, PT.");
-                    }
-
-                    await membroAlvo.ban({ reason: `Ordem verbal via IA: ${ordem.motivo}` });
+                    if (!membroAlvo) return message.reply("⚠️ Você precisa marcar (@) quem quer banir.");
+                    if (membroAlvo.id === OWNER_ID) return message.reply("⚠️ Não posso banir você, PT.");
+                    await membroAlvo.ban({ reason: `IA Morgan: ${ordem.motivo}` });
                     registrarInfracao(message.guild.id, membroAlvo.id, 'bans', `IA Morgan: ${ordem.motivo}`);
                     return message.reply(`🔨 ${ordem.resposta_chat}`);
                 }
-
-                // --- FUNÇÃO: LIMPAR CHAT (CLEAR) ---
-                if (ordem.acao === 'clear' && ehO_Dono) {
-                    // Limita a quantidade entre 1 e 100 para evitar erros na API do Discord
+                if (ordem.acao === 'clear' && ehDono) {
                     let qtd = parseInt(ordem.quantidade) || 100;
-                    if (qtd < 1) qtd = 1;
-                    if (qtd > 100) qtd = 100;
-
-                    // Deleta a mensagem original de ordem do dono para não atrapalhar a limpeza
+                    if (qtd < 1) qtd = 1; if (qtd > 100) qtd = 100;
                     await message.delete().catch(() => {});
-
-                    // Faz a limpeza em lote das mensagens
-                    const mensagensDeletadas = await message.channel.bulkDelete(qtd, true).catch(err => {
-                        console.error("Erro no bulkDelete:", err);
-                    });
-
-                    if (!mensagensDeletadas) {
-                        return message.channel.send("⚠️ **Erro:** Não consegui apagar as mensagens (mensagens com mais de 14 dias não podem ser limpas em massa pelo Discord).");
-                    }
-
-                    // Envia resposta de confirmação e apaga ela depois de 5 segundos para o chat ficar zerado
-                    const respostaConfirmacao = await message.channel.send(`🧹 ${ordem.resposta_chat} (\`${mensagensDeletadas.size}\` mensagens limpas)`);
-                    setTimeout(() => {
-                        respostaConfirmacao.delete().catch(() => {});
-                    }, 5000);
+                    const deletadas = await message.channel.bulkDelete(qtd, true).catch(() => null);
+                    if (!deletadas) return message.channel.send("⚠️ Mensagens com mais de 14 dias não podem ser limpas em massa.");
+                    const conf = await message.channel.send(`🧹 ${ordem.resposta_chat} (\`${deletadas.size}\` mensagens)`);
+                    setTimeout(() => conf.delete().catch(() => {}), 5000);
                     return;
                 }
-
-            } catch (errJson) {
-                console.error("Erro ao decodificar JSON de ordem:", errJson);
-            }
+            } catch (e) { console.error("Erro ao decodificar JSON de ordem:", e); }
         }
 
-        // ⚙️ SISTEMA DE CAPTURA 2: CRIAÇÃO DE COMANDOS (Formato por Tags)
-        if (textoResposta.includes('[CRIAR_COMANDO]') && ehO_Dono) {
+        if (textoResposta.includes('[CRIAR_COMANDO]') && ehDono) {
             try {
-                const extrairTagTexto = (tag, texto) => {
-                    const tagInicio = '<' + tag + '>';
-                    const tagFim = '</' + tag + '>';
-                    const indexInicio = texto.indexOf(tagInicio);
-                    if (indexInicio === -1) return null;
-                    const indexFim = texto.indexOf(tagFim, indexInicio + tagInicio.length);
-                    if (indexFim === -1) return null;
-                    return texto.slice(indexInicio + tagInicio.length, indexFim).trim();
+                const extrairTag = (tag, texto) => {
+                    const ini = texto.indexOf('<' + tag + '>');
+                    const fim = texto.indexOf('</' + tag + '>');
+                    if (ini === -1 || fim === -1) return null;
+                    return texto.slice(ini + tag.length + 2, fim).trim();
                 };
-
-                const nomeArquivo = extrairTagTexto('nome_arquivo', textoResposta);
-                const categoria = (extrairTagTexto('categoria_pasta', textoResposta) || 'utilitarios').toLowerCase().trim();
-                const respostaChat = extrairTagTexto('resposta_chat', textoResposta) || 'Comando criado com sucesso, PT!';
-                const codigoJs = extrairTagTexto('codigo_js', textoResposta);
-
+                const nomeArquivo  = extrairTag('nome_arquivo', textoResposta);
+                const categoria    = (extrairTag('categoria_pasta', textoResposta) || 'utilitarios').toLowerCase();
+                const respostaChat = extrairTag('resposta_chat', textoResposta) || 'Comando criado, PT!';
+                const codigoJs     = extrairTag('codigo_js', textoResposta);
                 if (nomeArquivo && codigoJs) {
-                    const nomeFinal = nomeArquivo.endsWith('.js') ? nomeArquivo : `${nomeArquivo}.js`;
-                    const pastaDestino = path.join(__dirname, 'commands', categoria);
-                    
-                    if (!fs.existsSync(pastaDestino)) {
-                        fs.mkdirSync(pastaDestino, { recursive: true });
-                    }
-
+                    const nomeFinal      = nomeArquivo.endsWith('.js') ? nomeArquivo : `${nomeArquivo}.js`;
+                    const pastaDestino   = path.join(__dirname, 'commands', categoria);
+                    if (!fs.existsSync(pastaDestino)) fs.mkdirSync(pastaDestino, { recursive: true });
                     const caminhoArquivo = path.join(pastaDestino, nomeFinal);
-
                     fs.writeFileSync(caminhoArquivo, codigoJs, 'utf-8');
-
                     delete require.cache[require.resolve(caminhoArquivo)];
                     const novoComando = require(caminhoArquivo);
                     novoComando.category = categoria;
                     client.commands.set(novoComando.name, novoComando);
-
-                    return message.reply(`⚙️ **[Compilador]** ${respostaChat}\n\`Caminho: commands/${categoria}/${nomeFinal}\``);
+                    return message.reply(`⚙️ **[Compilador]** ${respostaChat}\n\`commands/${categoria}/${nomeFinal}\``);
                 }
-            } catch (errCriacao) {
-                console.error("Erro no processamento do compilador por tags:", errCriacao);
-                return message.reply("❌ **Erro:** Não consegui compilar o comando. Algo deu errado na escrita do arquivo.");
+            } catch (e) {
+                console.error("Erro no compilador por tags:", e);
+                return message.reply("❌ Não consegui compilar o comando.");
             }
         }
 
-        // Retorna conversa padrão se nenhuma instrução especial for acionada
         return message.reply(textoResposta);
-
     } catch (err) {
-        console.error("Erro no processamento da resposta da IA:", err);
+        console.error("Erro no processamento da IA:", err);
     }
-}
 });
 
-// --- LOGIN DO BOT ---
-// Substitua o final do seu index.js por:
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.TOKEN);

@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reth Morgan — Central Operacional</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blood: #8B0000;
+    --blood-bright: #C0392B;
+    --blood-dim: #2a0000;
+    --dark: #080a08;
+    --surface: #0e100e;
+    --surface2: #131613;
+    --surface3: #171b17;
+    --tape: #d4c89a;
+    --text: #c8cfc4;
+    --text-dim: #4a5246;
+    --green-ok: #4ade80;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --font-body: 'Crimson Pro', serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--dark); color: var(--text); font-family: var(--font-body); min-height: 100vh; display: flex; flex-direction: column; }
+  body::before { content: ''; position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E"); opacity: 0.04; pointer-events: none; z-index: 0; }
+  .blood-bar { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--blood); z-index: 200; box-shadow: 0 0 16px rgba(139,0,0,0.7); }
+
+  .topbar { position: sticky; top: 4px; z-index: 100; background: rgba(8,10,8,0.95); border-bottom: 1px solid #1a1e1a; backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; height: 56px; }
+  .topbar-left { display: flex; align-items: center; gap: 20px; }
+  .topbar-logo { font-family: var(--font-display); font-size: 20px; letter-spacing: 4px; color: #e8ebe5; }
+  .topbar-logo span { color: var(--blood-bright); }
+  .topbar-tag { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 3px; border-left: 1px solid #1a1e1a; padding-left: 20px; }
+  .topbar-user { display: flex; align-items: center; gap: 10px; }
+  .topbar-avatar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--blood); object-fit: cover; filter: saturate(0.6); }
+  .topbar-username { font-family: var(--font-mono); font-size: 12px; color: var(--text); }
+  .topbar-badge { font-family: var(--font-mono); font-size: 9px; color: var(--blood-bright); border: 1px solid var(--blood-dim); background: rgba(139,0,0,0.1); padding: 3px 8px; letter-spacing: 2px; }
+
+  .shell { display: flex; flex: 1; padding-top: 4px; position: relative; z-index: 1; }
+
+  .sidebar { width: 220px; flex-shrink: 0; border-right: 1px solid #1a1e1a; padding: 28px 0; position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto; }
+  .sidebar-section { padding: 0 0 24px 0; border-bottom: 1px solid #1a1e1a; margin-bottom: 24px; }
+  .sidebar-label { font-family: var(--font-mono); font-size: 8px; letter-spacing: 3px; color: var(--text-dim); padding: 0 20px; margin-bottom: 10px; display: block; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; cursor: pointer; transition: background 0.15s; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 1px; border-left: 2px solid transparent; text-decoration: none; }
+  .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+  .sidebar-item.active { color: var(--blood-bright); border-left-color: var(--blood-bright); background: rgba(139,0,0,0.07); }
+  .sidebar-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+  .sidebar-item.active .sidebar-dot { background: var(--blood-bright); }
+  .sidebar-item:hover .sidebar-dot { background: var(--text); }
+
+  .server-select-wrap { padding: 0 16px; margin-bottom: 4px; }
+  .server-select-wrap select { width: 100%; background: var(--surface2); border: 1px solid #1a1e1a; color: var(--text); font-family: var(--font-mono); font-size: 11px; padding: 9px 10px; outline: none; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5246'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+  .server-select-wrap select:focus { border-color: var(--blood); }
+
+  .content { flex: 1; padding: 36px 40px 80px; max-width: 820px; }
+
+  .page-header { margin-bottom: 40px; padding-bottom: 28px; border-bottom: 1px solid #1a1e1a; position: relative; }
+  .page-header::before { content: 'CENTRAL OPERACIONAL'; font-family: var(--font-mono); font-size: 8px; letter-spacing: 4px; color: var(--text-dim); display: block; margin-bottom: 10px; }
+  .page-title { font-family: var(--font-display); font-size: 40px; letter-spacing: 4px; color: #e8ebe5; line-height: 1; margin-bottom: 6px; }
+  .page-title span { color: var(--blood-bright); }
+  .page-sub { font-family: var(--font-body); font-style: italic; font-size: 14px; color: rgba(200,207,196,0.4); }
+
+  .panic-zone { background: rgba(139,0,0,0.06); border: 1px solid rgba(139,0,0,0.25); padding: 20px 24px; margin-bottom: 40px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+  .panic-info h3 { font-family: var(--font-display); font-size: 16px; letter-spacing: 3px; color: var(--blood-bright); margin-bottom: 4px; }
+  .panic-info p { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 1px; }
+  .btn-panic { background: var(--blood); color: #fff; border: none; font-family: var(--font-display); font-size: 14px; letter-spacing: 3px; padding: 12px 28px; cursor: pointer; transition: all 0.2s; flex-shrink: 0; position: relative; overflow: hidden; }
+  .btn-panic::before { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.1); transform: scaleX(0); transform-origin: left; transition: transform 0.2s; }
+  .btn-panic:hover { box-shadow: 0 0 20px rgba(139,0,0,0.5); }
+  .btn-panic:hover::before { transform: scaleX(1); }
+
+  .section { margin-bottom: 44px; }
+  .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .section-num { font-family: var(--font-display); font-size: 28px; color: var(--blood-dim); letter-spacing: 2px; line-height: 1; }
+  .section-title { font-family: var(--font-display); font-size: 16px; letter-spacing: 4px; color: #e8ebe5; }
+  .section-header::after { content: ''; flex: 1; height: 1px; background: #1a1e1a; }
+
+  .toggle-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 16px 20px; background: var(--surface); border: 1px solid #1a1e1a; margin-bottom: 2px; transition: background 0.15s; }
+  .toggle-row:hover { background: var(--surface2); }
+  .toggle-name { font-family: var(--font-display); font-size: 14px; letter-spacing: 2px; color: #d0d7cc; margin-bottom: 3px; }
+  .toggle-desc { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); line-height: 1.6; max-width: 480px; }
+
+  .toggle-switch { position: relative; width: 42px; height: 22px; flex-shrink: 0; margin-top: 2px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track { position: absolute; inset: 0; background: #1a1e1a; border: 1px solid #2a2e2a; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+  .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: var(--text-dim); transition: transform 0.2s, background 0.2s; }
+  .toggle-switch input:checked ~ .toggle-track { background: rgba(139,0,0,0.3); border-color: var(--blood); }
+  .toggle-switch input:checked ~ .toggle-thumb { transform: translateX(20px); background: var(--blood-bright); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin-bottom: 2px; }
+  .grid-2 .toggle-row { margin-bottom: 0; }
+
+  .field { margin-bottom: 2px; }
+  .field-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 2px; color: var(--text-dim); display: block; margin-bottom: 6px; text-transform: uppercase; padding-left: 2px; }
+  .field input { width: 100%; background: var(--surface); border: 1px solid #1a1e1a; color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 11px 14px; outline: none; transition: border-color 0.15s; }
+  .field input:focus { border-color: var(--blood); }
+  .field input::placeholder { color: var(--text-dim); }
+
+  .num-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+  .triple { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; }
+
+  .tape-sep { height: 1px; background: rgba(212,200,154,0.08); margin: 32px 0; position: relative; }
+  .tape-sep::before { content: attr(data-label); position: absolute; left: 0; top: -7px; font-family: var(--font-mono); font-size: 8px; color: rgba(212,200,154,0.25); letter-spacing: 3px; background: var(--dark); padding-right: 12px; }
+
+  .save-bar { position: fixed; bottom: 0; left: 220px; right: 0; background: rgba(8,10,8,0.97); border-top: 1px solid #1a1e1a; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; z-index: 50; backdrop-filter: blur(8px); }
+  .save-status { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
+  .save-status span { color: var(--green-ok); }
+  .btn-save { background: transparent; border: 1px solid var(--blood); color: var(--blood-bright); font-family: var(--font-display); font-size: 14px; letter-spacing: 3px; padding: 10px 32px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+  .btn-save::before { content: ''; position: absolute; inset: 0; background: var(--blood); transform: scaleX(0); transform-origin: left; transition: transform 0.2s; z-index: -1; }
+  .btn-save:hover { color: #fff; }
+  .btn-save:hover::before { transform: scaleX(1); }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 300; align-items: center; justify-content: center; }
+  .overlay.active { display: flex; }
+  .overlay-box { background: var(--surface); border: 1px solid var(--blood); border-top: 3px solid var(--blood); padding: 40px; max-width: 440px; width: 90%; text-align: center; }
+  .overlay-title { font-family: var(--font-display); font-size: 30px; letter-spacing: 4px; color: var(--blood-bright); margin-bottom: 10px; }
+  .overlay-msg { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); line-height: 1.8; margin-bottom: 28px; letter-spacing: 1px; }
+  .overlay-btns { display: flex; gap: 10px; justify-content: center; }
+  .btn-confirm { background: var(--blood); color: #fff; border: none; font-family: var(--font-display); font-size: 14px; letter-spacing: 3px; padding: 12px 28px; cursor: pointer; transition: opacity 0.2s; }
+  .btn-confirm:hover { opacity: 0.85; }
+  .btn-cancel { background: transparent; color: var(--text-dim); border: 1px solid #1a1e1a; font-family: var(--font-display); font-size: 14px; letter-spacing: 3px; padding: 12px 28px; cursor: pointer; transition: color 0.2s; }
+  .btn-cancel:hover { color: var(--text); }
+
+  .toast { position: fixed; bottom: 80px; right: 32px; background: var(--surface2); border: 1px solid #1a1e1a; border-left: 3px solid var(--green-ok); font-family: var(--font-mono); font-size: 11px; color: var(--text); padding: 12px 18px; letter-spacing: 1px; z-index: 400; transform: translateY(20px); opacity: 0; transition: all 0.3s; pointer-events: none; }
+  .toast.error { border-left-color: var(--blood-bright); }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  .no-server { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; gap: 16px; opacity: 0.4; }
+  .no-server-num { font-family: var(--font-display); font-size: 80px; color: var(--blood-dim); letter-spacing: 4px; line-height: 1; }
+  .no-server-msg { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 3px; }
+
+  @media (max-width: 700px) {
+    .sidebar { display: none; }
+    .save-bar { left: 0; }
+    .content { padding: 24px 16px 80px; }
+    .grid-2, .num-pair, .triple { grid-template-columns: 1fr; }
+    .topbar { padding: 0 16px; }
+    .topbar-tag { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="blood-bar"></div>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">RETH <span>MORGAN</span></div>
+    <div class="topbar-tag">CENTRAL OPERACIONAL · SHIELD V8</div>
+  </div>
+  <div class="topbar-user">
+    <img id="user-avatar" src="" class="topbar-avatar" alt="Avatar">
+    <span id="username" class="topbar-username">Carregando...</span>
+    <div class="topbar-badge">OPERADOR</div>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <span class="sidebar-label">INFRAESTRUTURA</span>
+      <div class="server-select-wrap">
+        <select id="serverSelect" onchange="alternarServidor(this.value)">
+          <option value="" disabled selected>Selecionar servidor...</option>
+        </select>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <span class="sidebar-label">PROTOCOLOS</span>
+      <a class="sidebar-item active" onclick="irParaSecao('sec-antinuke', this)">
+        <span class="sidebar-dot"></span>ANTI-NUKE
+      </a>
+      <a class="sidebar-item" onclick="irParaSecao('sec-filtros', this)">
+        <span class="sidebar-dot"></span>FILTROS
+      </a>
+      <a class="sidebar-item" onclick="irParaSecao('sec-canais', this)">
+        <span class="sidebar-dot"></span>CANAIS & LOGS
+      </a>
+      <a class="sidebar-item" onclick="irParaSecao('sec-ia', this)">
+        <span class="sidebar-dot"></span>IA MORGAN
+      </a>
+    </div>
+    <div style="padding: 0 16px;">
+      <a href="/auth/logout" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 2px; text-decoration: none; transition: color 0.2s; display: block; padding: 8px 4px;" onmouseover="this.style.color='#c8cfc4'" onmouseout="this.style.color='var(--text-dim)'">← ENCERRAR SESSÃO</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="no-server" id="no-server">
+      <div class="no-server-num">—</div>
+      <div class="no-server-msg">SELECIONE UMA INFRAESTRUTURA</div>
+    </div>
+
+    <div id="management-area" style="display:none;">
+      <div class="page-header">
+        <div class="page-title">PROTOCOLOS <span>ATIVOS</span></div>
+        <div class="page-sub" id="guild-name-display">Servidor selecionado</div>
+      </div>
+
+      <!-- PANIC -->
+      <div class="panic-zone">
+        <div class="panic-info">
+          <h3>🚨 BOTÃO DE PÂNICO</h3>
+          <p>LOCKDOWN TOTAL — TRANCA TODOS OS CANAIS DE TEXTO INSTANTANEAMENTE</p>
+        </div>
+        <button class="btn-panic" onclick="abrirConfirmPanico()">ACIONAR PROTOCOLO</button>
+      </div>
+
+      <!-- SEÇÃO 01: ANTI-NUKE -->
+      <div class="section" id="sec-antinuke">
+        <div class="section-header">
+          <div class="section-num">01</div>
+          <div class="section-title">PROTOCOLOS ANTI-NUKE</div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">MÓDULO ANTI-NUKE</div>
+            <div class="toggle-desc">Revoga privilégios + timeout de quem deletar 3+ canais em 10 segundos.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="antinuke"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">TRAVA DE CONVITES</div>
+            <div class="toggle-desc">Bloqueia convites de Discord enviados no chat por membros sem permissão.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="travaConvites"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">BLOQUEIO DE BOTS (ANTI-BOT)</div>
+            <div class="toggle-desc">Bane bots não autorizados e o executor da injeção ilícita automaticamente.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="bloqueioBots"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">ANTI-FAKE</div>
+            <div class="toggle-desc">Expulsa contas com menos dias que o mínimo configurado abaixo.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="antifake"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="field" style="margin-top:2px;">
+          <label class="field-label">IDADE MÍNIMA DA CONTA (DIAS)</label>
+          <input type="number" id="diasFake" placeholder="Ex: 7">
+        </div>
+
+        <div class="toggle-row" style="margin-top:2px;">
+          <div class="toggle-info">
+            <div class="toggle-name">DETECTOR DE SELFBOTS</div>
+            <div class="toggle-desc">Timeout de 30 min para contas com padrão suspeito: +10 msgs em 5s ou 5 msgs idênticas seguidas.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="detectorSelfbots"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="tape-sep" data-label="LIMITES DE PUNIÇÃO"></div>
+
+        <div class="grid-2">
+          <div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <div class="toggle-name">ANTI-MASS BAN</div>
+                <div class="toggle-desc">Suspende staff por bans em massa acima do limite em 1 minuto.</div>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" id="antiMassBan"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+            </div>
+            <div class="field" style="margin-top:2px;">
+              <input type="number" id="maxBans" placeholder="Máx. bans/min (ex: 5)">
+            </div>
+          </div>
+          <div>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <div class="toggle-name">ANTI-MASS KICK</div>
+                <div class="toggle-desc">Suspende staff por kicks em massa acima do limite em 1 minuto.</div>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" id="antiMassKick"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+            </div>
+            <div class="field" style="margin-top:2px;">
+              <input type="number" id="maxKicks" placeholder="Máx. kicks/min (ex: 5)">
+            </div>
+          </div>
+        </div>
+
+        <div class="tape-sep" data-label="WHITELIST"></div>
+        <div class="field">
+          <label class="field-label">IDs CONFIÁVEIS — WHITELIST (separados por vírgula)</label>
+          <input type="text" id="whitelistIds" placeholder="Ex: 123456789012345678, 987654321098765432">
+        </div>
+      </div>
+
+      <!-- SEÇÃO 02: FILTROS -->
+      <div class="section" id="sec-filtros">
+        <div class="section-header">
+          <div class="section-num">02</div>
+          <div class="section-title">FILTROS & MODERAÇÃO</div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">ANTI-FLOOD</div>
+            <div class="toggle-desc">Remove mensagens e avisa usuários que ultrapassem o limite em 4 segundos.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="antiflood"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+        <div class="field" style="margin-top:2px;">
+          <label class="field-label">LIMITE DE MENSAGENS EM 4 SEGUNDOS</label>
+          <input type="number" id="limiteFlood" placeholder="Ex: 5">
+        </div>
+
+        <div class="toggle-row" style="margin-top:2px;">
+          <div class="toggle-info">
+            <div class="toggle-name">ANTI-LINK</div>
+            <div class="toggle-desc">Remove links enviados por usuários sem permissão. Se domínios banidos estiverem preenchidos abaixo, só bloqueia esses.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="antilink"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">ANTI-INVITE</div>
+            <div class="toggle-desc">Bloqueia convites de outros servidores Discord no chat.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="antiinvite"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">ANTI-PRECONCEITO</div>
+            <div class="toggle-desc">Apaga mensagens com palavras proibidas e registra um warn automático.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="antipreconceito"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">AUTO-MOD DE NOMES</div>
+            <div class="toggle-desc">Renomeia nicks com caracteres invisíveis ou nulos para "Usuário" automaticamente.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="autoModNomes"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="grid-2">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-name">ANTI-CAPS</div>
+              <div class="toggle-desc">Apaga mensagens com +70% de maiúsculas acima de 10 caracteres.</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="antiCapsLock"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-name">ANTI-SPOILER</div>
+              <div class="toggle-desc">Remove mensagens com mais de 3 tags spoiler ||texto|| por mensagem.</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="antiSpoiler"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+        </div>
+
+        <div class="tape-sep" data-label="LIMITES NUMÉRICOS"></div>
+
+        <div class="num-pair">
+          <div class="field">
+            <label class="field-label">LIMITE DE MENÇÕES POR MENSAGEM</label>
+            <input type="number" id="limiteMencoes" placeholder="Ex: 5">
+          </div>
+          <div class="field">
+            <label class="field-label">MÁXIMO DE EMOJIS POR MENSAGEM</label>
+            <input type="number" id="maxEmojis" placeholder="Ex: 10">
+          </div>
+        </div>
+
+        <div class="toggle-row" style="margin-top:2px;">
+          <div class="toggle-info">
+            <div class="toggle-name">FILTRO DE EMOJIS</div>
+            <div class="toggle-desc">Ativa o limite de emojis por mensagem definido acima.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="filtroEmojis"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="tape-sep" data-label="PUNIÇÕES AUTOMÁTICAS"></div>
+
+        <div class="num-pair">
+          <div class="field">
+            <label class="field-label">BAN AUTOMÁTICO AO ATINGIR X WARNS</label>
+            <input type="number" id="autoPunicaoWarns" placeholder="Ex: 3">
+          </div>
+          <div class="field">
+            <label class="field-label">LIMPEZA AGENDADA A CADA X HORAS</label>
+            <input type="number" id="horasLimpeza" placeholder="Ex: 24">
+          </div>
+        </div>
+
+        <div class="toggle-row" style="margin-top:2px;">
+          <div class="toggle-info">
+            <div class="toggle-name">LIMPEZA AGENDADA</div>
+            <div class="toggle-desc">Limpa automaticamente o canal de logs no intervalo configurado acima.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="limpezaAgendada"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="tape-sep" data-label="DOMÍNIOS & PUNIÇÕES"></div>
+
+        <div class="field">
+          <label class="field-label">DOMÍNIOS BANIDOS (separados por vírgula — vazio = bloqueia todos)</label>
+          <input type="text" id="filtroLinks" placeholder="Ex: siteofensivo.com, linkrival.gg">
+        </div>
+
+        <div class="field" style="margin-top:2px;">
+          <label class="field-label">MENSAGEM DE PUNIÇÃO CUSTOMIZADA (opcional)</label>
+          <input type="text" id="customPunishMsg" placeholder="Texto exibido ao usuário punido">
+        </div>
+
+        <div class="field" style="margin-top:2px;">
+          <label class="field-label">ID DO CARGO DE SILENCIAMENTO (MUTED ROLE)</label>
+          <input type="text" id="mutedRoleId" placeholder="ID do cargo de mute">
+        </div>
+      </div>
+
+      <!-- SEÇÃO 03: CANAIS & LOGS -->
+      <div class="section" id="sec-canais">
+        <div class="section-header">
+          <div class="section-num">03</div>
+          <div class="section-title">CANAIS & LOGS</div>
+        </div>
+
+        <div class="tape-sep" data-label="LOGS DE SEGURANÇA"></div>
+        <div class="num-pair">
+          <div class="field">
+            <label class="field-label">CANAL DE LOGS DE SEGURANÇA</label>
+            <input type="text" id="logs_seguranca" placeholder="ID do canal">
+          </div>
+          <div class="field">
+            <label class="field-label">CANAL DE LOGS DE STAFF</label>
+            <input type="text" id="logs_staff" placeholder="ID do canal">
+          </div>
+        </div>
+
+        <div class="num-pair" style="margin-top:2px;">
+          <div class="field">
+            <label class="field-label">CANAL DE LOGS DE MENSAGENS</label>
+            <input type="text" id="logs_msg" placeholder="ID do canal">
+          </div>
+          <div class="field">
+            <label class="field-label">CANAL DE LOGS DE ANTI-CARGOS</label>
+            <input type="text" id="logs_anticargos" placeholder="ID do canal">
+          </div>
+        </div>
+
+        <div class="tape-sep" data-label="MEMBROS & BOAS-VINDAS"></div>
+        <div class="num-pair">
+          <div class="field">
+            <label class="field-label">CANAL DE LOGS JOIN/LEAVE</label>
+            <input type="text" id="logs_join" placeholder="ID do canal">
+          </div>
+          <div class="field">
+            <label class="field-label">CANAL DE BOAS-VINDAS (mensagem pública)</label>
+            <input type="text" id="msg_join" placeholder="ID do canal">
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:2px;">
+          <label class="field-label">ID DO CARGO DE AUTOROLE (cargo dado ao entrar)</label>
+          <input type="text" id="autorole" placeholder="ID do cargo">
+        </div>
+
+        <div class="tape-sep" data-label="CANAL PRINCIPAL DE LOGS"></div>
+        <div class="field">
+          <label class="field-label">CANAL GERAL DE LOGS (usado para limpeza agendada)</label>
+          <input type="text" id="logChannelId" placeholder="ID do canal">
+        </div>
+      </div>
+
+      <!-- SEÇÃO 04: IA MORGAN -->
+      <div class="section" id="sec-ia">
+        <div class="section-header">
+          <div class="section-num">04</div>
+          <div class="section-title">IA MORGAN</div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">ATIVAR IA MORGAN</div>
+            <div class="toggle-desc">Permite que membros interajam com a IA via "morgan," ou menção ao bot neste servidor.</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="morgan_ativo"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
+        <div class="field" style="margin-top:2px;">
+          <label class="field-label">CANAL EXCLUSIVO DA IA (todas as mensagens aqui ativam a IA)</label>
+          <input type="text" id="morgan_canal" placeholder="ID do canal (deixe vazio para desativar)">
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div class="save-bar">
+  <div class="save-status" id="save-status">STATUS — <span>AGUARDANDO SELEÇÃO</span></div>
+  <button class="btn-save" onclick="salvarAlteracoes()">GRAVAR PROTOCOLOS</button>
+</div>
+
+<div class="overlay" id="panicOverlay">
+  <div class="overlay-box">
+    <div class="overlay-title">⚠ LOCKDOWN</div>
+    <div class="overlay-msg">ATENÇÃO: ESTA AÇÃO IRÁ TRANCAR<br>TODOS OS CANAIS DE TEXTO DO SERVIDOR<br>IMEDIATAMENTE E SEM REVERSÃO AUTOMÁTICA.<br><br>CONFIRME A ORDEM DE LOCKDOWN GERAL.</div>
+    <div class="overlay-btns">
+      <button class="btn-confirm" onclick="confirmarPanico()">CONFIRMAR</button>
+      <button class="btn-cancel" onclick="fecharOverlay()">CANCELAR</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  /* DATA_INJECTION */
+
+  function showToast(msg, tipo) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (tipo === 'error' ? ' error' : '');
+    setTimeout(() => t.classList.add('show'), 10);
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  // ── SCROLL CORRIGIDO ──
+  function irParaSecao(id, el) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    if (el) el.classList.add('active');
+  }
+
+  // ── INIT ──
+  if (!window.dashboardData) {
+    document.getElementById('username').innerText = 'Sessão expirada';
+    setTimeout(() => window.location.href = '/', 1500);
+  } else {
+    document.getElementById('username').innerText = window.dashboardData.username;
+    document.getElementById('user-avatar').src = window.dashboardData.avatar;
+    const select = document.getElementById('serverSelect');
+    window.dashboardData.guilds.forEach(guild => {
+      const opt = document.createElement('option');
+      opt.value = guild.id;
+      opt.innerText = guild.name;
+      select.appendChild(opt);
+    });
+  }
+
+  // ── TROCAR SERVIDOR ──
+  function alternarServidor(guildId) {
+    if (!guildId) return;
+    document.getElementById('no-server').style.display = 'none';
+    document.getElementById('management-area').style.display = 'block';
+    document.getElementById('save-status').innerHTML = 'STATUS — <span>CARREGANDO...</span>';
+
+    const guildName = document.getElementById('serverSelect').options[document.getElementById('serverSelect').selectedIndex].text;
+    document.getElementById('guild-name-display').textContent = guildName;
+
+    fetch(`/api/config/${guildId}`)
+      .then(r => r.json())
+      .then(data => {
+        const set = (id, val) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          if (el.type === 'checkbox') el.checked = !!val;
+          else el.value = val || '';
+        };
+
+        // Anti-nuke
+        set('antinuke',         data.antinuke);
+        set('travaConvites',    data.travaConvites);
+        set('bloqueioBots',     data.bloqueioBots || data.antibot);
+        set('antifake',         data.antifake);
+        set('diasFake',         data.diasFake || 7);
+        set('detectorSelfbots', data.detectorSelfbots);
+        set('antiMassBan',      data.antiMassBan);
+        set('maxBans',          data.maxBans || 5);
+        set('antiMassKick',     data.antiMassKick);
+        set('maxKicks',         data.maxKicks || 5);
+        set('whitelistIds',     data.whitelistIds);
+
+        // Filtros
+        set('antiflood',        data.antiflood);
+        set('limiteFlood',      data.limiteFlood || 5);
+        set('antilink',         data.antilink);
+        set('antiinvite',       data.antiinvite);
+        set('antipreconceito',  data.antipreconceito);
+        set('autoModNomes',     data.autoModNomes);
+        set('antiCapsLock',     data.antiCapsLock || data.anticaps);
+        set('antiSpoiler',      data.antiSpoiler);
+        set('limiteMencoes',    data.limiteMencoes || 5);
+        set('filtroEmojis',     data.filtroEmojis);
+        set('maxEmojis',        data.maxEmojis || 10);
+        set('autoPunicaoWarns', data.autoPunicaoWarns || 3);
+        set('limpezaAgendada',  data.limpezaAgendada);
+        set('horasLimpeza',     data.horasLimpeza || 24);
+        set('filtroLinks',      data.filtroLinks);
+        set('customPunishMsg',  data.customPunishMsg);
+        set('mutedRoleId',      data.mutedRoleId);
+
+        // Canais
+        set('logs_seguranca',   data.logs_seguranca);
+        set('logs_staff',       data.logs_staff);
+        set('logs_msg',         data.logs_msg);
+        set('logs_anticargos',  data.logs_anticargos);
+        set('logs_join',        data.logs_join);
+        set('msg_join',         data.msg_join);
+        set('autorole',         data.autorole);
+        set('logChannelId',     data.logChannelId);
+
+        // IA
+        set('morgan_ativo',     data.morgan_ativo);
+        set('morgan_canal',     data.morgan_canal);
+
+        document.getElementById('save-status').innerHTML = 'STATUS — <span>PRONTO</span>';
+      })
+      .catch(() => {
+        document.getElementById('save-status').innerHTML = 'STATUS — <span style="color:var(--blood-bright)">ERRO AO CARREGAR</span>';
+      });
+  }
+
+  // ── SALVAR ──
+  function salvarAlteracoes() {
+    const guildId = document.getElementById('serverSelect').value;
+    if (!guildId) return showToast('Selecione um servidor primeiro.', 'error');
+
+    const get = id => {
+      const el = document.getElementById(id);
+      if (!el) return undefined;
+      return el.type === 'checkbox' ? el.checked : el.value;
+    };
+
+    const payload = {
+      guildId,
+      // Anti-nuke
+      antinuke:         get('antinuke'),
+      travaConvites:    get('travaConvites'),
+      bloqueioBots:     get('bloqueioBots'),
+      antibot:          get('bloqueioBots'), // compatibilidade
+      antifake:         get('antifake'),
+      diasFake:         get('diasFake'),
+      detectorSelfbots: get('detectorSelfbots'),
+      antiMassBan:      get('antiMassBan'),
+      maxBans:          get('maxBans'),
+      antiMassKick:     get('antiMassKick'),
+      maxKicks:         get('maxKicks'),
+      whitelistIds:     get('whitelistIds'),
+      // Filtros
+      antiflood:        get('antiflood'),
+      limiteFlood:      get('limiteFlood'),
+      antilink:         get('antilink'),
+      antiinvite:       get('antiinvite'),
+      antipreconceito:  get('antipreconceito'),
+      autoModNomes:     get('autoModNomes'),
+      antiCapsLock:     get('antiCapsLock'),
+      anticaps:         get('antiCapsLock'), // compatibilidade
+      antiSpoiler:      get('antiSpoiler'),
+      limiteMencoes:    get('limiteMencoes'),
+      filtroEmojis:     get('filtroEmojis'),
+      maxEmojis:        get('maxEmojis'),
+      autoPunicaoWarns: get('autoPunicaoWarns'),
+      limpezaAgendada:  get('limpezaAgendada'),
+      horasLimpeza:     get('horasLimpeza'),
+      filtroLinks:      get('filtroLinks'),
+      customPunishMsg:  get('customPunishMsg'),
+      mutedRoleId:      get('mutedRoleId'),
+      // Canais
+      logs_seguranca:   get('logs_seguranca'),
+      logs_staff:       get('logs_staff'),
+      logs_msg:         get('logs_msg'),
+      logs_anticargos:  get('logs_anticargos'),
+      logs_join:        get('logs_join'),
+      msg_join:         get('msg_join'),
+      autorole:         get('autorole'),
+      logChannelId:     get('logChannelId'),
+      // IA
+      morgan_ativo:     get('morgan_ativo'),
+      morgan_canal:     get('morgan_canal')
+    };
+
+    document.getElementById('save-status').innerHTML = 'STATUS — <span>GRAVANDO...</span>';
+
+    fetch('/api/config/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(res => {
+      showToast(res.message || 'Protocolos gravados com sucesso.');
+      document.getElementById('save-status').innerHTML = 'STATUS — <span>SALVO</span>';
+    })
+    .catch(() => {
+      showToast('Erro ao gravar. Verifique a conexão.', 'error');
+      document.getElementById('save-status').innerHTML = 'STATUS — <span style="color:var(--blood-bright)">FALHA</span>';
+    });
+  }
+
+  function abrirConfirmPanico() {
+    const guildId = document.getElementById('serverSelect').value;
+    if (!guildId) return showToast('Selecione um servidor antes de acionar o lockdown.', 'error');
+    document.getElementById('panicOverlay').classList.add('active');
+  }
+
+  function fecharOverlay() {
+    document.getElementById('panicOverlay').classList.remove('active');
+  }
+
+  function confirmarPanico() {
+    fecharOverlay();
+    const guildId = document.getElementById('serverSelect').value;
+    fetch('/api/config/panic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guildId })
+    })
+    .then(r => r.json())
+    .then(res => showToast(res.message || 'Lockdown acionado.'))
+    .catch(() => showToast('Erro ao acionar protocolo de emergência.', 'error'));
+  }
+</script>
+</body>
+</html>s

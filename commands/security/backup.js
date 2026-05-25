@@ -1,196 +1,440 @@
-// Arquivo: commands/security/backup.js
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const fs = require('fs');
+// commands/security/backup.js
+// Requer: discord.js v14+, Node 18+
+'use strict';
+
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+} = require('discord.js');
+const fs   = require('fs/promises');
+const path = require('path');
+
+// ─── Configuração ────────────────────────────────────────────────────────────
+
+const DB_PATH       = path.resolve('./database/backups.json');
+const CFG_PATH      = path.resolve('./database/backup_config.json');
+const COLLECTOR_TTL = 120_000;
+const DELAY_ROLE    = 350;
+const DELAY_CHANNEL = 400;
+
+// Estado dos timers em memória: guildId → { timer, intervalMs, proxima: Date }
+const autoTimers = new Map();
+
+// ─── Parse de duração ────────────────────────────────────────────────────────
+
+function parseDuration(str) {
+    if (!str || typeof str !== 'string') return null;
+    const regex = /(\d+)\s*(d|h|m)/gi;
+    const units = { d: 86_400_000, h: 3_600_000, m: 60_000 };
+    let total = 0, match;
+    while ((match = regex.exec(str)) !== null)
+        total += parseInt(match[1], 10) * units[match[2].toLowerCase()];
+    return total > 0 ? total : null;
+}
+
+function formatDuration(ms) {
+    const d = Math.floor(ms / 86_400_000);
+    const h = Math.floor((ms % 86_400_000) / 3_600_000);
+    const m = Math.floor((ms % 3_600_000) / 60_000);
+    return [d && `${d}d`, h && `${h}h`, m && `${m}m`].filter(Boolean).join(' ') || '< 1m';
+}
+
+function formatDate(date) {
+    return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+// ─── I/O de config ───────────────────────────────────────────────────────────
+
+async function readCfg() {
+    try { return JSON.parse(await fs.readFile(CFG_PATH, 'utf-8')); }
+    catch { return {}; }
+}
+
+async function writeCfg(data) {
+    const tmp = CFG_PATH + '.tmp';
+    await fs.mkdir(path.dirname(CFG_PATH), { recursive: true });
+    await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf-8');
+    await fs.rename(tmp, CFG_PATH);
+}
+
+// ─── I/O de backups ──────────────────────────────────────────────────────────
+
+async function readDB() {
+    try { return JSON.parse(await fs.readFile(DB_PATH, 'utf-8')); }
+    catch (e) { if (e.code !== 'ENOENT') console.warn('[backup] readDB:', e.message); return {}; }
+}
+
+async function writeDB(data) {
+    const tmp = DB_PATH + '.tmp';
+    await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
+    await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf-8');
+    await fs.rename(tmp, DB_PATH);
+}
+
+// ─── Timer automático ────────────────────────────────────────────────────────
+
+async function armarTimer(guild, intervalMs) {
+    if (autoTimers.has(guild.id)) clearInterval(autoTimers.get(guild.id).timer);
+
+    const proxima = new Date(Date.now() + intervalMs);
+
+    const timer = setInterval(async () => {
+        try {
+            const db = await readDB();
+            db[guild.id] = snapshotGuild(guild);
+            await writeDB(db);
+
+            const cfg = await readCfg();
+            if (cfg[guild.id]) {
+                cfg[guild.id].proxima = new Date(Date.now() + intervalMs).toISOString();
+                await writeCfg(cfg);
+                if (autoTimers.has(guild.id))
+                    autoTimers.get(guild.id).proxima = new Date(Date.now() + intervalMs);
+            }
+            console.log(`[auto-backup] ${guild.name} salvo em ${new Date().toISOString()}`);
+        } catch (e) {
+            console.error('[auto-backup] Falha:', e.message);
+        }
+    }, intervalMs);
+
+    autoTimers.set(guild.id, { timer, intervalMs, proxima });
+
+    const cfg = await readCfg();
+    cfg[guild.id] = { intervalMs, proxima: proxima.toISOString() };
+    await writeCfg(cfg);
+}
+
+async function cancelarTimer(guildId) {
+    if (autoTimers.has(guildId)) {
+        clearInterval(autoTimers.get(guildId).timer);
+        autoTimers.delete(guildId);
+    }
+    const cfg = await readCfg();
+    delete cfg[guildId];
+    await writeCfg(cfg);
+}
+
+/**
+ * Recarrega timers persistidos ao iniciar o bot.
+ * Chame no evento 'ready': recarregarTimers(client)
+ */
+async function recarregarTimers(client) {
+    const cfg = await readCfg();
+    for (const [guildId, { intervalMs }] of Object.entries(cfg)) {
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) continue;
+        await armarTimer(guild, intervalMs);
+        console.log(`[auto-backup] Timer rearmado: ${guild.name} — ${formatDuration(intervalMs)}`);
+    }
+}
+
+// ─── Snapshot ────────────────────────────────────────────────────────────────
+
+function snapshotGuild(guild) {
+    const cargos = guild.roles.cache
+        .filter(r => r.id !== guild.id && !r.managed)
+        .sort((a, b) => a.position - b.position)
+        .map(r => ({
+            id: r.id, name: r.name, color: r.color, hoist: r.hoist,
+            mentionable: r.mentionable, permissions: r.permissions.bitfield.toString(), position: r.position,
+        }));
+
+    const canais = guild.channels.cache
+        .sort((a, b) => a.position - b.position)
+        .map(c => ({
+            id: c.id, name: c.name, type: c.type, parentId: c.parentId ?? null,
+            position: c.position, topic: c.topic ?? null, nsfw: c.nsfw ?? false,
+            overwrites: c.permissionOverwrites.cache.map(o => ({
+                id: o.id, type: o.type,
+                allow: o.allow.bitfield.toString(), deny: o.deny.bitfield.toString(),
+            })),
+        }));
+
+    return { nome: guild.name, data: new Date().toISOString(), cargos, canais };
+}
+
+// ─── Restore ─────────────────────────────────────────────────────────────────
+
+async function restoreGuild(guild, snapshot, statusMsg) {
+    const upd = (txt) => statusMsg.edit({ content: txt, embeds: [], components: [] }).catch(() => {});
+
+    await upd('🔴 **[1/5]** Removendo canais...');
+    for (const c of [...guild.channels.cache.values()]) await c.delete().catch(() => {});
+
+    await upd('🔴 **[2/5]** Removendo cargos...');
+    const posBot = guild.members.me.roles.highest.position;
+    for (const r of [...guild.roles.cache.values()])
+        if (r.id !== guild.id && !r.managed && r.position < posBot) await r.delete().catch(() => {});
+
+    const mapaCargos = {}, mapaCanais = {};
+
+    await upd('🟡 **[3/5]** Recriando cargos...');
+    for (const cOld of snapshot.cargos) {
+        try {
+            const novo = await guild.roles.create({
+                name: cOld.name, color: cOld.color, hoist: cOld.hoist,
+                mentionable: cOld.mentionable, permissions: BigInt(cOld.permissions),
+                position: cOld.position, reason: 'Restore de backup',
+            });
+            mapaCargos[cOld.id] = novo.id;
+        } catch (e) { console.error(`[restore] Cargo "${cOld.name}":`, e.message); }
+        await delay(DELAY_ROLE);
+    }
+
+    const convOws = (ows) => (ows ?? []).map(ov => ({
+        id: mapaCargos[ov.id] ?? ov.id, type: ov.type,
+        allow: BigInt(ov.allow), deny: BigInt(ov.deny),
+    }));
+
+    await upd('🟡 **[4/5]** Recriando categorias...');
+    for (const cat of snapshot.canais.filter(c => c.type === 4).sort((a, b) => a.position - b.position)) {
+        try {
+            const nova = await guild.channels.create({
+                name: cat.name, type: 4, position: cat.position,
+                permissionOverwrites: convOws(cat.overwrites), reason: 'Restore de backup',
+            });
+            mapaCanais[cat.id] = nova.id;
+        } catch (e) { console.error(`[restore] Categoria "${cat.name}":`, e.message); }
+        await delay(DELAY_CHANNEL);
+    }
+
+    await upd('🟡 **[5/5]** Recriando canais...');
+    for (const ch of snapshot.canais.filter(c => c.type !== 4).sort((a, b) => a.position - b.position)) {
+        try {
+            await guild.channels.create({
+                name: ch.name, type: ch.type,
+                parent: ch.parentId ? (mapaCanais[ch.parentId] ?? null) : null,
+                position: ch.position, topic: ch.topic, nsfw: ch.nsfw,
+                permissionOverwrites: convOws(ch.overwrites), reason: 'Restore de backup',
+            });
+        } catch (e) { console.error(`[restore] Canal "${ch.name}":`, e.message); }
+        await delay(DELAY_CHANNEL);
+    }
+
+    await upd('🟩 **SISTEMA:** Servidor restaurado com sucesso.');
+}
+
+// ─── Utilitários ─────────────────────────────────────────────────────────────
+
+const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+async function tempMsg(channel, content, ms = 5000) {
+    const m = await channel.send({ content }).catch(() => null);
+    if (m) setTimeout(() => m.delete().catch(() => {}), ms);
+}
+
+// ─── Embeds & Componentes ────────────────────────────────────────────────────
+
+function painelPrincipal(guildId) {
+    const timerInfo = autoTimers.get(guildId);
+    const autoAtivo = !!timerInfo;
+
+    const linhaAuto = autoAtivo
+        ? `⏱️ **Auto Backup** — 🟩 Ativo · Intervalo: \`${formatDuration(timerInfo.intervalMs)}\` · Próximo: \`${formatDate(timerInfo.proxima)}\``
+        : '⏱️ **Auto Backup** — 🟥 Inativo · Clique para configurar o intervalo.';
+
+    const embed = new EmbedBuilder()
+        .setColor('#2b2d31')
+        .setTitle('🗄️ COFRE DE BACKUPS')
+        .setDescription(
+            '💾 **Salvar Backup** — Snapshot completo de cargos, canais e permissões.\n' +
+            '🔄 **Restaurar Backup** — Reconstrói o servidor a partir do último snapshot.\n' +
+            linhaAuto
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('bkp_salvar').setLabel('Salvar').setEmoji('💾').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('bkp_restaurar').setLabel('Restaurar').setEmoji('🔄').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId('bkp_auto')
+            .setLabel(autoAtivo ? 'Auto: ON' : 'Auto: OFF')
+            .setEmoji('⏱️')
+            .setStyle(autoAtivo ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    );
+
+    return { embed, row };
+}
+
+function embedConfirmacaoRestore(snapshot) {
+    if (!snapshot) {
+        return {
+            embed: new EmbedBuilder()
+                .setColor('#f53b57')
+                .setTitle('❌ Nenhum Backup Encontrado')
+                .setDescription('Salve um backup antes de tentar restaurar.'),
+            components: [],
+        };
+    }
+    return {
+        embed: new EmbedBuilder()
+            .setColor('#f53b57')
+            .setTitle('⚠️ PROTOCOLO DE RESTAURAÇÃO')
+            .setDescription(
+                `**Backup:** \`${snapshot.nome}\` — salvo em \`${formatDate(new Date(snapshot.data))}\`\n` +
+                `**Cargos:** ${snapshot.cargos.length} · **Canais:** ${snapshot.canais.length}\n\n` +
+                '**ATENÇÃO:** Todos os canais e cargos atuais serão **APAGADOS** e recriados.\n' +
+                '**Esta ação é irreversível.** Deseja continuar?'
+            )
+            .setFooter({ text: 'Confirme apenas se tiver certeza absoluta.' }),
+        components: [
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('bkp_confirmar_sim').setLabel('Executar Restore').setEmoji('✅').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('bkp_confirmar_nao').setLabel('Cancelar').setEmoji('❌').setStyle(ButtonStyle.Secondary),
+            ),
+        ],
+    };
+}
+
+function modalIntervalo() {
+    return new ModalBuilder()
+        .setCustomId('bkp_modal_intervalo')
+        .setTitle('Configurar Backup Automático')
+        .addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('bkp_input_intervalo')
+                    .setLabel('Intervalo (ex: 1d, 12h, 1d 6h, 30m)')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('1d 12h')
+                    .setMinLength(2)
+                    .setMaxLength(20)
+                    .setRequired(true)
+            )
+        );
+}
+
+// ─── Módulo do Comando ────────────────────────────────────────────────────────
 
 module.exports = {
     name: 'backup',
     aliases: ['bkp'],
+    recarregarTimers, // chame no evento 'ready' do seu client
+
     execute: async (msg, args, client, OWNER_ID) => {
-        if (msg.author.id !== OWNER_ID && msg.author.id !== msg.guild.ownerId) {
-            return msg.reply('👑 Apenas a alta cúpula gerencia o cofre de backups.');
-        }
+        const { guild, author, channel } = msg;
 
-        // Interface Principal
-        const painelBkp = new EmbedBuilder()
-            .setColor('#2b2d31')
-            .setTitle('🗄️ COFRE DE BACKUPS — RETH MORGAN')
-            .setDescription(
-                'Selecione uma das diretrizes mecânicas abaixo utilizando as interações:\n\n' +
-                '💾 **[Salvar Backup]:** Tira um snapshot completo de cargos, canais e permissões.\n' +
-                '🔄 **[Restaurar Backup]:** Executa o reset linear e reconstrói o servidor.\n' +
-                '⏱️ **[Backup Automático]:** Ativa/Desativa o ciclo automático de salvamento (12h).'
-            );
+        if (author.id !== OWNER_ID && author.id !== guild.ownerId)
+            return msg.reply({ content: '👑 Apenas a alta cúpula pode gerenciar backups.' });
 
-        const botoesPrincipal = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('bkp_salvar').setLabel('Salvar').setEmoji('💾').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('bkp_restaurar').setLabel('Restaurar').setEmoji('🔄').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('bkp_auto').setLabel('Auto (12h)').setEmoji('⏱️').setStyle(ButtonStyle.Primary)
-        );
+        const { embed, row } = painelPrincipal(guild.id);
+        const resposta       = await msg.reply({ embeds: [embed], components: [row] });
 
-        const resposta = await msg.reply({ embeds: [painelBkp], components: [botoesPrincipal] });
-        const coletor = resposta.createMessageComponentCollector({ time: 120000 }); // 2 minutos ativo
+        const coletor = resposta.createMessageComponentCollector({
+            filter: (i) => i.user.id === author.id,
+            time:   COLLECTOR_TTL,
+        });
 
         coletor.on('collect', async (i) => {
-            if (i.user.id !== msg.author.id) {
-                return i.reply({ content: '❌ Você não iniciou esta sessão de segurança.', ephemeral: true });
-            }
 
-            let backups = {};
-            try {
-                const conteudo = fs.readFileSync('./database/backups.json', 'utf-8');
-                if (conteudo.trim()) backups = JSON.parse(conteudo);
-            } catch (e) { backups = {}; }
-
-            // --- FUNÇÃO: SALVAR BACKUP ---
+            // ── SALVAR ──────────────────────────────────────────────────────
             if (i.customId === 'bkp_salvar') {
                 await i.deferUpdate();
-                
-                const cargosMapeados = msg.guild.roles.cache.filter(r => r.id !== msg.guild.id && !r.managed).map(r => ({
-                    id: r.id, name: r.name, color: r.color, hoist: r.hoist, mentionable: r.mentionable, permissions: r.permissions.bitfield.toString(), position: r.position
-                }));
-                const canaisMapeados = msg.guild.channels.cache.map(c => ({
-                    name: c.name, type: c.type, parentId: c.parentId, position: c.position, topic: c.topic || null, nsfw: c.nsfw || false,
-                    overwrites: c.permissionOverwrites.cache.map(o => ({ id: o.id, type: o.type, allow: o.allow.bitfield.toString(), deny: o.deny.bitfield.toString() }))
-                }));
-
-                backups[msg.guild.id] = { nome: msg.guild.name, data: new Date().toLocaleDateString('pt-BR'), cargos: cargosMapeados, canais: canaisMapeados };
-                fs.writeFileSync('./database/backups.json', JSON.stringify(backups, null, 2));
-
-                const msgSucesso = await msg.channel.send('🟩 **SISTEMA:** Ponto de restauração manual criado com sucesso.');
-                setTimeout(() => msgSucesso.delete().catch(() => {}), 5000);
+                try {
+                    const db = await readDB();
+                    db[guild.id] = snapshotGuild(guild);
+                    await writeDB(db);
+                    const { embed: e, row: r } = painelPrincipal(guild.id);
+                    await resposta.edit({ embeds: [e], components: [r] });
+                    await tempMsg(channel, `🟩 **SISTEMA:** Backup salvo em \`${formatDate(new Date())}\`.`);
+                } catch (e) {
+                    console.error('[backup] Falha ao salvar:', e);
+                    await tempMsg(channel, '❌ **ERRO:** Falha ao gravar o backup. Verifique os logs.');
+                }
                 return;
             }
 
-            // --- FUNÇÃO: INTERFACE DE CONFIRMAÇÃO DO RESET (BOTÕES) ---
+            // ── RESTAURAR — Confirmação ──────────────────────────────────────
             if (i.customId === 'bkp_restaurar') {
                 await i.deferUpdate();
-
-                const embedConfirmar = new EmbedBuilder()
-                    .setColor('#f53b57')
-                    .setTitle('⚠️ PROTOCOLO DE ALTA INFRAESTRUTURA')
-                    .setDescription(
-                        '**ATENÇÃO MÁXIMA:** Você escolheu restaurar o servidor.\n' +
-                        'Isso vai **APAGAR TODOS OS CANAIS E CARGOS ATUAIS** para reinjetar o backup.\n\n' +
-                        'Deseja prosseguir com a formatação e reconstrução automática?'
-                    )
-                    .setFooter({ text: 'Esta ação é irreversível.' });
-
-                const botoesConfirmar = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('bkp_confirmar_true').setLabel('Sim, Executar Reset').setEmoji('🟩').setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId('bkp_confirmar_false').setLabel('Cancelar Protocolo').setEmoji('🟥').setStyle(ButtonStyle.Secondary)
-                );
-
-                // Troca a interface principal pelos botões de sim/não
-                await resposta.edit({ embeds: [embedConfirmar], components: [botoesConfirmar] });
+                const db = await readDB();
+                const { embed: e, components } = embedConfirmacaoRestore(db[guild.id] ?? null);
+                await resposta.edit({ embeds: [e], components });
                 return;
             }
 
-            // --- CANCELAR RESET ---
-            if (i.customId === 'bkp_confirmar_false') {
+            // ── RESTAURAR — Cancelar ─────────────────────────────────────────
+            if (i.customId === 'bkp_confirmar_nao') {
                 await i.deferUpdate();
-                // Devolve o painel para o estado inicial estável
-                await resposta.edit({ embeds: [painelBkp], components: [botoesPrincipal] });
+                const { embed: e, row: r } = painelPrincipal(guild.id);
+                await resposta.edit({ embeds: [e], components: [r] });
                 return;
             }
 
-            // --- EXECUTAR RESET BRUTAL CONFIRMADO VIA BOTÃO ---
-            if (i.customId === 'bkp_confirmar_true') {
+            // ── RESTAURAR — Executar ─────────────────────────────────────────
+            if (i.customId === 'bkp_confirmar_sim') {
                 await i.deferUpdate();
-                const backupServer = backups[msg.guild.id];
-                if (!backupServer) return msg.channel.send('❌ Nenhum snapshot de segurança encontrado para este servidor no JSON.');
-
-                // Apaga a mensagem do painel para não bugar durante o processo de deleção de salas
+                const db       = await readDB();
+                const snapshot = db[guild.id];
+                if (!snapshot) { await tempMsg(channel, '❌ Snapshot não encontrado.'); return; }
+                coletor.stop('restore_iniciado');
+                const msgProg = await channel.send({ content: '⏳ **SISTEMA:** Iniciando protocolo de restauração...' });
                 await resposta.delete().catch(() => {});
-
-                // 1. Deleta Canais
-                const canaisAtuais = msg.guild.channels.cache;
-                for (const [, canal] of canaisAtuais) {
-                    await canal.delete().catch(() => {});
+                try {
+                    await restoreGuild(guild, snapshot, msgProg);
+                } catch (e) {
+                    console.error('[restore] Erro crítico:', e);
+                    await msgProg.edit({ content: '❌ **ERRO CRÍTICO:** Restore falhou. Verifique os logs.' }).catch(() => {});
                 }
-
-                // 2. Deleta Cargos (Abaixo da hierarquia do Bot)
-                const cargosAtuais = msg.guild.roles.cache;
-                for (const [, cargo] of cargosAtuais) {
-                    if (cargo.id !== msg.guild.id && !cargo.managed && cargo.position < msg.guild.members.me.roles.highest.position) {
-                        await cargo.delete().catch(() => {});
-                    }
-                }
-
-                const tabelaCargos = {};
-                const tabelaCategorias = {};
-
-                // 3. Recriar Cargos Ordenados
-                const cargosOrdenados = backupServer.cargos.sort((a, b) => a.position - b.position);
-                for (const cOld of cargosOrdenados) {
-                    const novoCargo = await msg.guild.roles.create({
-                        name: cOld.name, color: cOld.color, hoist: cOld.hoist, mentionable: cOld.mentionable, permissions: BigInt(cOld.permissions), position: cOld.position
-                    }).catch(() => {});
-
-                    if (novoCargo) {
-                        tabelaCargos[cOld.id] = novoCargo.id;
-                        await new Promise(res => setTimeout(res, 350));
-                    }
-                }
-
-                // 4. Recriar Categorias
-                const categoriasBackup = backupServer.canais.filter(c => c.type === 4).sort((a, b) => a.position - b.position);
-                for (const cat of categoriasBackup) {
-                    const overwritesNovos = cat.overwrites ? cat.overwrites.map(ov => ({ id: tabelaCargos[ov.id] || ov.id, type: ov.type, allow: BigInt(ov.allow), deny: BigInt(ov.deny) })) : [];
-                    const novaCat = await msg.guild.channels.create({
-                        name: cat.name, type: 4, position: cat.position, permissionOverwrites: overwritesNovos
-                    }).catch(() => {});
-
-                    if (novaCat) {
-                        tabelaCategorias[cat.name] = novaCat.id;
-                        await new Promise(res => setTimeout(res, 400));
-                    }
-                }
-
-                // 5. Recriar Canais Normais amarrados nas categorias
-                const canaisNormais = backupServer.canais.filter(c => c.type !== 4).sort((a, b) => a.position - b.position);
-                for (const ch of canaisNormais) {
-                    const categoriaAntiga = backupServer.canais.find(o => o.type === 4 && o.id === ch.parentId);
-                    const novoParentId = categoriaAntiga ? tabelaCategorias[categoriaAntiga.name] : null;
-                    const overwritesNovos = ch.overwrites ? ch.overwrites.map(ov => ({ id: tabelaCargos[ov.id] || ov.id, type: ov.type, allow: BigInt(ov.allow), deny: BigInt(ov.deny) })) : [];
-
-                    await msg.guild.channels.create({
-                        name: ch.name, type: ch.type, parent: novoParentId, position: ch.position, topic: ch.topic, nsfw: ch.nsfw, permissionOverwrites: overwritesNovos
-                    }).catch(() => {});
-
-                    await new Promise(res => setTimeout(res, 400));
-                }
-
                 return;
             }
 
-            // --- FUNÇÃO: BACKUP AUTOMÁTICO (12H) ---
+            // ── AUTO BACKUP ──────────────────────────────────────────────────
             if (i.customId === 'bkp_auto') {
-                await i.deferUpdate();
-                if (global.bkpIntervals?.[msg.guild.id]) {
-                    clearInterval(global.bkpIntervals[msg.guild.id]);
-                    delete global.bkpIntervals[msg.guild.id];
-                    const msgOff = await msg.channel.send('⏱️ **MÓDULO:** Backup automático desativado.');
-                    setTimeout(() => msgOff.delete().catch(() => {}), 5000);
+                if (autoTimers.has(guild.id)) {
+                    // Desativar
+                    await i.deferUpdate();
+                    await cancelarTimer(guild.id);
+                    const { embed: e, row: r } = painelPrincipal(guild.id);
+                    await resposta.edit({ embeds: [e], components: [r] });
+                    await tempMsg(channel, '⏱️ **MÓDULO:** Backup automático **desativado**.');
                 } else {
-                    if (!global.bkpIntervals) global.bkpIntervals = {};
-                    global.bkpIntervals[msg.guild.id] = setInterval(() => {
-                        let bkpAt = JSON.parse(fs.readFileSync('./database/backups.json', 'utf-8') || '{}');
-                        const crg = msg.guild.roles.cache.filter(r => r.id !== msg.guild.id && !r.managed).map(r => ({ id: r.id, name: r.name, color: r.color, permissions: r.permissions.bitfield.toString(), position: r.position }));
-                        const cna = msg.guild.channels.cache.map(c => ({ name: c.name, type: c.type, parentId: c.parentId, position: c.position }));
-                        bkpAt[msg.guild.id] = { nome: msg.guild.name, data: `AUTO - ${new Date().toLocaleDateString('pt-BR')}`, cargos: crg, canais: cna };
-                        fs.writeFileSync('./database/backups.json', JSON.stringify(bkpAt, null, 2));
-                    }, 12 * 60 * 60 * 1000);
+                    // Abre modal para configurar intervalo
+                    await i.showModal(modalIntervalo());
 
-                    const msgOn = await msg.channel.send('🟩 **MÓDULO:** Cronômetro armado! Salvamento automático configurado a cada 12 horas.');
-                    setTimeout(() => msgOn.delete().catch(() => {}), 5000);
+                    let submit;
+                    try {
+                        submit = await i.awaitModalSubmit({
+                            filter: (m) => m.customId === 'bkp_modal_intervalo' && m.user.id === author.id,
+                            time: 60_000,
+                        });
+                    } catch {
+                        return; // Usuário fechou sem preencher
+                    }
+
+                    const inputBruto = submit.fields.getTextInputValue('bkp_input_intervalo').trim();
+                    const intervalMs = parseDuration(inputBruto);
+
+                    if (!intervalMs) {
+                        await submit.reply({
+                            content: '❌ **Formato inválido.** Use `d` (dias), `h` (horas), `m` (minutos).\nExemplos: `1d`, `12h`, `1d 6h`, `30m`.',
+                            ephemeral: true,
+                        });
+                        return;
+                    }
+
+                    await submit.deferUpdate();
+                    await armarTimer(guild, intervalMs);
+
+                    const timerInfo = autoTimers.get(guild.id);
+                    const { embed: e, row: r } = painelPrincipal(guild.id);
+                    await resposta.edit({ embeds: [e], components: [r] });
+                    await tempMsg(
+                        channel,
+                        `🟩 **MÓDULO:** Backup automático ativado — intervalo: \`${formatDuration(intervalMs)}\` · Próximo: \`${formatDate(timerInfo.proxima)}\`.`
+                    );
                 }
                 return;
             }
         });
 
-        coletor.on('end', () => {
-            // Remove os botões se o dono ficar mais de 2 minutos sem clicar em nada
+        coletor.on('end', (_, reason) => {
+            if (reason === 'restore_iniciado') return;
             resposta.edit({ components: [] }).catch(() => {});
         });
-    }
+    },
 };

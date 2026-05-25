@@ -1,20 +1,20 @@
 {
   "1507627638720823316": {
     "nome": "Dev's Reth",
-    "data": "24/05/2026",
+    "data": "2026-05-24T22:59:46.805Z",
     "cargos": [
       {
-        "id": "1507667364685283431",
-        "name": "Developer´s",
-        "color": 918532,
+        "id": "1507954046579769525",
+        "name": "「👤」ᴍᴇᴍʙʀᴏ",
+        "color": 15844367,
         "hoist": true,
         "mentionable": false,
-        "permissions": "7047098549841079",
+        "permissions": "0",
         "position": 2
       },
       {
-        "id": "1507667365851037857",
-        "name": "BOT´S",
+        "id": "1507975276301127730",
+        "name": "「🧪」ᴛᴇsᴛᴇʀ",
         "color": 0,
         "hoist": true,
         "mentionable": false,
@@ -22,52 +22,54 @@
         "position": 3
       },
       {
-        "id": "1507954046579769525",
-        "name": "BetaTester´s",
-        "color": 2413319,
-        "hoist": false,
+        "id": "1507975150409089024",
+        "name": "「💻」ᴅᴇᴠ ᴛᴇᴀᴍ",
+        "color": 985096,
+        "hoist": true,
+        "mentionable": false,
+        "permissions": "6756525490236566",
+        "position": 4
+      },
+      {
+        "id": "1507667364685283431",
+        "name": "「👑」ᴀᴅᴍɪɴ ᴅᴇᴠ",
+        "color": 15470094,
+        "hoist": true,
+        "mentionable": false,
+        "permissions": "7047098549841079",
+        "position": 5
+      },
+      {
+        "id": "1507667365851037857",
+        "name": "「🛡️」ʀᴇᴛʜ ᴍᴏʀɢᴀɴ",
+        "color": 211148,
+        "hoist": true,
         "mentionable": false,
         "permissions": "0",
-        "position": 1
+        "position": 6
       }
     ],
     "canais": [
       {
+        "id": "1507667367206060085",
         "name": "ɪɴғᴏʀᴍᴀçõᴇs",
         "type": 4,
         "parentId": null,
         "position": 0,
         "topic": null,
         "nsfw": false,
-        "overwrites": []
-      },
-      {
-        "name": "ᴄᴏᴍᴜɴɪᴅᴀᴅᴇ",
-        "type": 4,
-        "parentId": null,
-        "position": 2,
-        "topic": null,
-        "nsfw": false,
-        "overwrites": []
-      },
-      {
-        "name": "sᴇɢᴜʀᴀɴçᴀ",
-        "type": 4,
-        "parentId": null,
-        "position": 3,
-        "topic": null,
-        "nsfw": false,
         "overwrites": [
           {
             "id": "1507627638720823316",
             "type": 0,
-            "allow": "0",
-            "deny": "1024"
+            "allow": "66560",
+            "deny": "274877908992"
           }
         ]
       },
       {
-        "name": "💬-ɢᴇʀᴀʟ",
+        "id": "1507667371425267843",
+        "name": "💬┃ɢᴇʀᴀʟ",
         "type": 0,
         "parentId": "1507667369122861097",
         "position": 0,
@@ -83,6 +85,7 @@
         ]
       },
       {
+        "id": "1507667374516469911",
         "name": "🎧 ᴠᴏɪᴄᴇ-ᴅᴇᴠ",
         "type": 2,
         "parentId": "1507667369122861097",
@@ -99,6 +102,7 @@
         ]
       },
       {
+        "id": "1507667376941039697",
         "name": "invasao-links",
         "type": 0,
         "parentId": "1507667370158719117",
@@ -107,14 +111,55 @@
         "nsfw": false,
         "overwrites": [
           {
+            "id": "1507975150409089024",
+            "type": 0,
+            "allow": "1024",
+            "deny": "274877908992"
+          },
+          {
             "id": "1507627638720823316",
             "type": 0,
             "allow": "0",
-            "deny": "3072"
+            "deny": "1024"
           }
         ]
       },
       {
+        "id": "1507972130216611870",
+        "name": "📢┃ᴀᴠɪsᴏs",
+        "type": 0,
+        "parentId": "1507667367206060085",
+        "position": 0,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "66560",
+            "deny": "274877908992"
+          }
+        ]
+      },
+      {
+        "id": "1507972509805445141",
+        "name": "🔧┃ʀᴇᴘᴏsɪᴛᴏʀɪᴏ",
+        "type": 0,
+        "parentId": "1507972342419292220",
+        "position": 0,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "66560",
+            "deny": "274877908992"
+          }
+        ]
+      },
+      {
+        "id": "1507667379075678251",
         "name": "comandos-staff",
         "type": 0,
         "parentId": "1507667370158719117",
@@ -123,64 +168,38 @@
         "nsfw": false,
         "overwrites": [
           {
-            "id": "1507627638720823316",
+            "id": "1507975150409089024",
             "type": 0,
-            "allow": "0",
-            "deny": "3072"
-          }
-        ]
-      },
-      {
-        "name": "log-msg",
-        "type": 0,
-        "parentId": "1507667370158719117",
-        "position": 2,
-        "topic": null,
-        "nsfw": false,
-        "overwrites": [
+            "allow": "1024",
+            "deny": "274877908992"
+          },
           {
             "id": "1507627638720823316",
             "type": 0,
             "allow": "0",
-            "deny": "3072"
+            "deny": "1024"
           }
         ]
       },
       {
-        "name": "entrada",
-        "type": 0,
-        "parentId": "1507667370158719117",
-        "position": 3,
-        "topic": null,
-        "nsfw": false,
-        "overwrites": [
-          {
-            "id": "1507627638720823316",
-            "type": 0,
-            "allow": "0",
-            "deny": "3072"
-          }
-        ]
-      },
-      {
-        "name": "📢ᴀᴠɪsᴏs",
-        "type": 0,
-        "parentId": "1507667367206060085",
-        "position": 0,
-        "topic": null,
-        "nsfw": false,
-        "overwrites": []
-      },
-      {
-        "name": "📜ʀᴇɢʀᴀs",
+        "id": "1507972272324087858",
+        "name": "📜┃ʀᴇɢʀᴀs",
         "type": 0,
         "parentId": "1507667367206060085",
         "position": 1,
         "topic": null,
         "nsfw": false,
-        "overwrites": []
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "66560",
+            "deny": "274877908992"
+          }
+        ]
       },
       {
+        "id": "1507972342419292220",
         "name": "ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ",
         "type": 4,
         "parentId": null,
@@ -191,29 +210,31 @@
           {
             "id": "1507627638720823316",
             "type": 0,
-            "allow": "1024",
+            "allow": "66560",
             "deny": "274877908992"
           }
         ]
       },
       {
-        "name": "💻-ɢᴇʀᴀʟ-ᴅᴇᴠ",
+        "id": "1507972420492070964",
+        "name": "💻┃ᴅᴇᴠ",
         "type": 0,
-        "parentId": "1507972342419292220",
-        "position": 0,
+        "parentId": "1507667369122861097",
+        "position": 1,
         "topic": null,
         "nsfw": false,
         "overwrites": [
           {
             "id": "1507627638720823316",
             "type": 0,
-            "allow": "1024",
-            "deny": "274877908992"
+            "allow": "274877910016",
+            "deny": "32768"
           }
         ]
       },
       {
-        "name": "🔧-ʀᴇᴘᴏsɪᴛᴏʀɪᴏ",
+        "id": "1507972569721077781",
+        "name": "🐛┃ʙᴜɢ-ʀᴇᴘᴏʀᴛ",
         "type": 0,
         "parentId": "1507972342419292220",
         "position": 1,
@@ -223,15 +244,16 @@
           {
             "id": "1507627638720823316",
             "type": 0,
-            "allow": "1024",
+            "allow": "66560",
             "deny": "274877908992"
           }
         ]
       },
       {
-        "name": "🐛-ʙᴜɢ-ʀᴇᴘᴏʀᴛ",
-        "type": 0,
-        "parentId": "1507972342419292220",
+        "id": "1507667369122861097",
+        "name": "ᴄᴏᴍᴜɴɪᴅᴀᴅᴇ",
+        "type": 4,
+        "parentId": null,
         "position": 2,
         "topic": null,
         "nsfw": false,
@@ -239,8 +261,128 @@
           {
             "id": "1507627638720823316",
             "type": 0,
+            "allow": "274877910016",
+            "deny": "32768"
+          }
+        ]
+      },
+      {
+        "id": "1507667381768687718",
+        "name": "log-msg",
+        "type": 0,
+        "parentId": "1507667370158719117",
+        "position": 2,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507975150409089024",
+            "type": 0,
             "allow": "1024",
             "deny": "274877908992"
+          },
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "1024"
+          }
+        ]
+      },
+      {
+        "id": "1507977802291482674",
+        "name": "📷┃ⁱᵐᵍ",
+        "type": 0,
+        "parentId": "1507667369122861097",
+        "position": 2,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "274877942784",
+            "deny": "0"
+          }
+        ]
+      },
+      {
+        "id": "1507667370158719117",
+        "name": "sᴇɢᴜʀᴀɴçᴀ",
+        "type": 4,
+        "parentId": null,
+        "position": 3,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507975150409089024",
+            "type": 0,
+            "allow": "1024",
+            "deny": "274877908992"
+          },
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "1024"
+          }
+        ]
+      },
+      {
+        "id": "1507833792214335689",
+        "name": "entrada",
+        "type": 0,
+        "parentId": "1507667370158719117",
+        "position": 3,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507975150409089024",
+            "type": 0,
+            "allow": "1024",
+            "deny": "274877908992"
+          },
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "0",
+            "deny": "1024"
+          }
+        ]
+      },
+      {
+        "id": "1507974155231039538",
+        "name": "💡┃sᴜɢᴇsᴛᴏᴇs-ʙᴏᴛ",
+        "type": 0,
+        "parentId": "1507667369122861097",
+        "position": 3,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "274877910016",
+            "deny": "32768"
+          }
+        ]
+      },
+      {
+        "id": "1508043629522845697",
+        "name": "🧠┃ᵐᵒʳᵍᵃⁿⁱᵃ",
+        "type": 0,
+        "parentId": "1507667369122861097",
+        "position": 4,
+        "topic": null,
+        "nsfw": false,
+        "overwrites": [
+          {
+            "id": "1507627638720823316",
+            "type": 0,
+            "allow": "274877910016",
+            "deny": "32768"
           }
         ]
       }
