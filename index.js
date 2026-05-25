@@ -194,7 +194,7 @@ process.on('uncaughtException', (err) => {
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, PermissionsBitField } = require('discord.js');
 const { perguntarParaIA } = require("./gemini.js");
 
-const PREFIX   = 'd!';
+const PREFIX   = 'r!';
 const OWNER_ID = '1507543140800921610';
 
 const client = new Client({
