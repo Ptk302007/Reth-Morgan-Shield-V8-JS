@@ -73,7 +73,6 @@
     z-index: 0;
   }
 
-  /* ── HERO ── */
   .hero {
     position: relative;
     z-index: 1;
@@ -232,7 +231,6 @@
   .btn-discord:hover { color: #fff; }
   .btn-discord:hover::before { transform: scaleX(1); }
 
-  /* ── LAYOUT ── */
   .layout {
     position: relative;
     z-index: 1;
@@ -252,12 +250,7 @@
     margin-bottom: 24px;
     margin-top: 56px;
   }
-  .sec-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: #1f261f;
-  }
+  .sec-title::after { content: ''; flex: 1; height: 1px; background: #1f261f; }
   .sec-title span { color: var(--blood-bright); }
 
   .tape-line {
@@ -279,7 +272,6 @@
     padding: 0 10px;
   }
 
-  /* ── SHIELD GRID ── */
   .shield-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -295,46 +287,12 @@
   }
   .shield-card:hover { background: #131913; }
   .shield-card:hover .shield-threat { opacity: 1; }
-  .shield-num {
-    font-family: var(--font-display);
-    font-size: 36px;
-    color: var(--blood-dim);
-    letter-spacing: 2px;
-    line-height: 1;
-    margin-bottom: 10px;
-  }
-  .shield-name {
-    font-family: var(--font-display);
-    font-size: 17px;
-    letter-spacing: 2px;
-    color: #c8cfc4;
-    margin-bottom: 6px;
-  }
-  .shield-desc {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--text-dim);
-    line-height: 1.7;
-  }
-  .shield-active {
-    position: absolute;
-    top: 14px; right: 14px;
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--green-pulse);
-    animation: blink 2s step-end infinite;
-  }
-  .shield-threat {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    color: var(--blood-bright);
-    margin-top: 12px;
-    letter-spacing: 1px;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
+  .shield-num { font-family: var(--font-display); font-size: 36px; color: var(--blood-dim); letter-spacing: 2px; line-height: 1; margin-bottom: 10px; }
+  .shield-name { font-family: var(--font-display); font-size: 17px; letter-spacing: 2px; color: #c8cfc4; margin-bottom: 6px; }
+  .shield-desc { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); line-height: 1.7; }
+  .shield-active { position: absolute; top: 14px; right: 14px; width: 8px; height: 8px; border-radius: 50%; background: var(--green-pulse); animation: blink 2s step-end infinite; }
+  .shield-threat { font-family: var(--font-mono); font-size: 9px; color: var(--blood-bright); margin-top: 12px; letter-spacing: 1px; opacity: 0; transition: opacity 0.2s; }
 
-  /* ── STATUS PANEL ── */
   .status-panel {
     background: var(--surface);
     border: 1px solid #1f261f;
@@ -344,22 +302,13 @@
     grid-template-columns: 1fr 1fr;
     gap: 24px;
   }
-  .status-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 9px 0;
-    border-bottom: 1px solid #1a1e1a;
-    font-family: var(--font-mono);
-    font-size: 12px;
-  }
+  .status-row { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0; border-bottom: 1px solid #1a1e1a; font-family: var(--font-mono); font-size: 12px; }
   .status-row:last-child { border-bottom: none; }
   .status-key { color: var(--text-dim); }
   .status-val { color: #c8cfc4; }
   .status-val.ok { color: var(--green-pulse); }
   .status-val.blood { color: var(--blood-bright); }
 
-  /* ── IA BLOCK ── */
   .ia-block {
     background: var(--surface);
     border: 1px solid #1f261f;
@@ -378,81 +327,20 @@
     background: var(--surface);
     padding: 0 8px;
   }
-  .ia-title {
-    font-family: var(--font-display);
-    font-size: 34px;
-    letter-spacing: 4px;
-    color: #e8ebe5;
-    margin-bottom: 10px;
-  }
-  .ia-desc {
-    font-family: var(--font-body);
-    font-size: 15px;
-    color: rgba(200,207,196,0.6);
-    line-height: 1.75;
-    max-width: 560px;
-  }
-  .ia-commands {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 22px;
-  }
-  .ia-cmd {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--tape);
-    background: rgba(212,200,154,0.07);
-    border: 1px solid rgba(212,200,154,0.15);
-    padding: 5px 13px;
-    letter-spacing: 1px;
-  }
+  .ia-title { font-family: var(--font-display); font-size: 34px; letter-spacing: 4px; color: #e8ebe5; margin-bottom: 10px; }
+  .ia-desc { font-family: var(--font-body); font-size: 15px; color: rgba(200,207,196,0.6); line-height: 1.75; max-width: 560px; }
+  .ia-commands { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .ia-cmd { font-family: var(--font-mono); font-size: 11px; color: var(--tape); background: rgba(212,200,154,0.07); border: 1px solid rgba(212,200,154,0.15); padding: 5px 13px; letter-spacing: 1px; }
 
-  /* ── COMMANDS ── */
-  .cmd-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 1px;
-    background: #131613;
-    border: 1px solid #1f261f;
-  }
+  .cmd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1px; background: #131613; border: 1px solid #1f261f; }
   .cmd-item { background: var(--surface); padding: 14px 18px; }
-  .cmd-name {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--blood-bright);
-    margin-bottom: 3px;
-  }
-  .cmd-cat {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    color: var(--text-dim);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-  }
+  .cmd-name { font-family: var(--font-mono); font-size: 13px; color: var(--blood-bright); margin-bottom: 3px; }
+  .cmd-cat { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
 
-  /* ── FOOTER ── */
-  footer {
-    position: relative;
-    z-index: 1;
-    border-top: 1px solid #1f261f;
-    padding: 30px 24px;
-    text-align: center;
-  }
-  .footer-logo {
-    font-family: var(--font-display);
-    font-size: 22px;
-    letter-spacing: 6px;
-    color: #1f261f;
-    margin-bottom: 8px;
-  }
+  footer { position: relative; z-index: 1; border-top: 1px solid #1f261f; padding: 30px 24px; text-align: center; }
+  .footer-logo { font-family: var(--font-display); font-size: 22px; letter-spacing: 6px; color: #1f261f; margin-bottom: 8px; }
   .footer-logo span { color: var(--blood-dim); }
-  .footer-text {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: #2a302a;
-    letter-spacing: 2px;
-  }
+  .footer-text { font-family: var(--font-mono); font-size: 10px; color: #2a302a; letter-spacing: 2px; }
 
   @media (max-width: 600px) {
     .stats-bar { flex-wrap: wrap; }
@@ -474,14 +362,13 @@
   <circle cx="260" cy="200" r="8" fill="#8B0000"/>
 </svg>
 
-<!-- ── HERO ── -->
 <section class="hero">
   <div class="evidence-tag">EVIDENCE TAG #V8 — RETH MORGAN SHIELD SYSTEM</div>
 
   <div class="avatar-wrap">
     <div class="avatar-ring">
-  <img src="/avatar.jpg" alt="Reth Morgan">
-</div>
+      <img src="/avatar.jpg" alt="Reth Morgan">
+    </div>
     <div class="status-dot"></div>
   </div>
 
@@ -511,7 +398,6 @@
   <a href="/auth/login" class="btn-discord">▶ CONECTAR VIA DISCORD</a>
 </section>
 
-<!-- ── MAIN ── -->
 <div class="layout">
 
   <div class="sec-title"><span>01</span> SISTEMAS DE DEFESA</div>
@@ -602,7 +488,7 @@
     <div>
       <div class="status-row"><span class="status-key">DEVELOPER</span><span class="status-val blood">PT</span></div>
       <div class="status-row"><span class="status-key">PREFIX</span><span class="status-val">r!</span></div>
-      <div class="status-row"><span class="status-key">IA MODEL</span><span class="status-val">GEMINI</span></div>
+      <div class="status-row"><span class="status-key">IA MODEL</span><span class="status-val">GROQ · LLAMA</span></div>
       <div class="status-row"><span class="status-key">DATABASE</span><span class="status-val">JSON LOCAL</span></div>
     </div>
   </div>
@@ -613,9 +499,10 @@
   <div class="ia-block">
     <div class="ia-title">RETH MORGAN IA</div>
     <p class="ia-desc">
-      Sistema de IA baseado em Gemini com personalidade direta e sem enrolação. Ativada por menção, 
-      prefixo <em>"morgan"</em> ou canal exclusivo. O criador (PT) possui acesso a comandos especiais 
+      Sistema de IA baseado em Groq (Llama) com personalidade direta e sem enrolação. Ativada por menção,
+      prefixo <em>"morgan"</em> ou canal exclusivo. O criador (PT) possui acesso a comandos especiais
       com execução via JSON estruturado — banimento, limpeza de chat e criação de comandos em tempo real.
+      Suporte a análise de imagens via visão computacional.
     </p>
     <div class="ia-commands">
       <span class="ia-cmd">@morgan [pergunta]</span>
