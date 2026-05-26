@@ -230,7 +230,7 @@ const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, Perm
 // ✅ ALTERADO: importa do groq.js em vez do gemini.js
 const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
-const PREFIX = 'd!';
+const PREFIX = 'r!';
 
 // ── DONOS DO BOT ──
 const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
