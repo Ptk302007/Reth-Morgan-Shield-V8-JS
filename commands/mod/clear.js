@@ -23,44 +23,61 @@ module.exports = {
             return msg.reply({ embeds: [erroEmbed] });
         }
 
-        // Avisa que a limpeza profunda começou (evita travar o chat)
+        // Avisa que a limpeza profunda começou
         await msg.delete().catch(() => {});
         const avisoIniciando = await msg.channel.send('🧹 *Iniciando varredura e limpeza profunda no canal...*');
 
         try {
-            // Puxa as mensagens do canal baseado na quantidade desejada
-            const mensagens = await msg.channel.messages.fetch({ limit: quantidade });
-            
-            // Separa o que tem menos de 14 dias do que é antigo
             const tempoLimite = Date.now() - 14 * 24 * 60 * 60 * 1000;
-            const mensagensNovas = mensagens.filter(m => m.createdTimestamp > tempoLimite && !m.pinned);
-            const mensagensAntigas = mensagens.filter(m => m.createdTimestamp <= tempoLimite && !m.pinned);
-
             let totalApagadas = 0;
+            let restante = quantidade;
+            let ultimoId = null;
 
-            // 1. Apaga as mensagens novas de forma rápida (Bulk Delete)
-            if (mensagensNovas.size > 0) {
-                const apagadasBulk = await msg.channel.bulkDelete(mensagensNovas, true);
-                totalApagadas += apagadasBulk.size;
-            }
+            // Busca em lotes de até 100 (limite da API do Discord)
+            while (restante > 0) {
+                const lote = Math.min(restante, 100);
 
-            // Apaga a mensagem de aviso inicial para não poluir
-            await avisoIniciando.delete().catch(() => {});
+                const opcoesFetch = { limit: lote };
+                if (ultimoId) opcoesFetch.before = ultimoId;
 
-            // 2. SISTEMA SEM LIMITES (Modo Mecânico): Apaga as mensagens antigas uma por uma
-            if (mensagensAntigas.size > 0 && totalApagadas < quantidade) {
+                const mensagens = await msg.channel.messages.fetch(opcoesFetch);
+
+                if (mensagens.size === 0) break;
+
+                // Atualiza o cursor para o próximo lote
+                ultimoId = mensagens.last().id;
+
+                // Separa novas (bulk) e antigas (uma por uma)
+                const mensagensNovas = mensagens.filter(m => m.createdTimestamp > tempoLimite && !m.pinned);
+                const mensagensAntigas = mensagens.filter(m => m.createdTimestamp <= tempoLimite && !m.pinned);
+
+                // Bulk delete nas mensagens novas
+                if (mensagensNovas.size > 0) {
+                    const apagadasBulk = await msg.channel.bulkDelete(mensagensNovas, true);
+                    totalApagadas += apagadasBulk.size;
+                }
+
+                // Delete individual nas mensagens antigas
                 for (const [, mensagem] of mensagensAntigas) {
                     if (totalApagadas >= quantidade) break;
                     await mensagem.delete().catch(() => {});
                     totalApagadas++;
-                    // Pequena pausa mecânica de 200 milissegundos para não tomar bloqueio (Rate Limit) do Discord
-                    await new Promise(resolve => setTimeout(resolve, 200)); 
+                    // Pausa de 200ms para evitar Rate Limit
+                    await new Promise(resolve => setTimeout(resolve, 200));
                 }
+
+                restante -= mensagens.size;
+
+                // Se já apagou o suficiente, para
+                if (totalApagadas >= quantidade) break;
             }
+
+            // Apaga o aviso inicial
+            await avisoIniciando.delete().catch(() => {});
 
             // EMBED PREMIUM DE CONCLUSÃO
             const sucessoClear = new EmbedBuilder()
-                .setColor('#2b2d31') // Estética escura padrão do Reth
+                .setColor('#2b2d31')
                 .setTitle('🧹 RETH MORGAN — SANITIZAÇÃO CONCLUÍDA')
                 .setDescription(`O canal de texto foi limpo e reestruturado com sucesso.`)
                 .addFields(
@@ -71,13 +88,14 @@ module.exports = {
                 .setFooter({ text: `Faxina Concluída com Sucesso` })
                 .setTimestamp();
 
-            // Envia o relatório e apaga ele sozinho depois de 5 segundos para o chat ficar 100% limpo
-            return msg.channel.send({ embeds: [sucessoEmbed = sucessoClear] }).then(m => {
+            // Envia o relatório e apaga depois de 5 segundos
+            return msg.channel.send({ embeds: [sucessoClear] }).then(m => {
                 setTimeout(() => m.delete().catch(() => {}), 5000);
             });
 
         } catch (error) {
             console.error('Erro no comando de clear:', error);
+            await avisoIniciando.delete().catch(() => {});
             return msg.channel.send('❌ Ocorreu um erro interno ao tentar limpar as mensagens deste canal.');
         }
     }
