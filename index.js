@@ -1,6 +1,7 @@
 // ============================================================
 //  RETH MORGAN — SHIELD SYSTEM V8
 //  index.js — Servidor + Bot + Painel Web Integrado
+//  ✅ Adaptado para Groq SDK (substitui Gemini)
 // ============================================================
 require('dotenv').config();
 const express    = require('express');
@@ -23,7 +24,7 @@ app.use(session({
 
 const CLIENT_ID     = process.env.DISCORD_CLIENT_ID;
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
+const REDIRECT_URI  = process.env.DISCORD_REDIRECT_URI;
 
 function requireLogin(req, res, next) {
     if (req.session?.user) return next();
@@ -154,6 +155,33 @@ app.post('/api/config/panic', requireLogin, async (req, res) => {
     }
 });
 
+app.get('/chat', requireLogin, (req, res) => {
+    const { user } = req.session;
+    let chatHtml = fs.readFileSync(path.join(__dirname, 'public', 'chat.html'), 'utf-8');
+    chatHtml = chatHtml.replace(
+        '/* DATA_INJECTION */',
+        `window.dashboardData = ${JSON.stringify({ id: user.id, username: user.username, avatar: user.avatar })};`
+    );
+    res.send(chatHtml);
+});
+
+// ── ROTA DE CHAT DO PAINEL (usa Groq diretamente) ──
+app.post('/api/chat', requireLogin, async (req, res) => {
+    const { mensagem, historico, sistema } = req.body;
+    if (!mensagem || typeof mensagem !== 'string') {
+        return res.status(400).json({ error: 'Mensagem inválida.' });
+    }
+    try {
+        // Passa o ID da sessão como "canal" para manter contexto no painel
+        const sessionId = `web_${req.session.user.id}`;
+        const resposta = await perguntarParaIA(mensagem, sistema, sessionId);
+        res.json({ resposta: resposta.trim() });
+    } catch (e) {
+        console.error('[API Chat]', e);
+        res.status(500).json({ error: 'Erro ao processar resposta da IA.' });
+    }
+});
+
 app.get('/auth/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/');
@@ -192,10 +220,19 @@ process.on('uncaughtException', (err) => {
 //  BOT DISCORD
 // ============================================================
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, PermissionsBitField } = require('discord.js');
-const { perguntarParaIA } = require("./gemini.js");
 
-const PREFIX   = 'r!';
-const OWNER_ID = '1507543140800921610';
+// ✅ ALTERADO: importa do groq.js em vez do gemini.js
+const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
+
+const PREFIX = 'd!';
+
+// ── DONOS DO BOT ──
+const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
+const OWNER_ID  = OWNER_IDS[0];
+
+function ehDono(userId) {
+    return OWNER_IDS.includes(userId);
+}
 
 const client = new Client({
     intents: [
@@ -265,7 +302,6 @@ function registrarInfracao(guildId, userId, tipo, motivo) {
         });
         fs.writeFileSync('./database/punicoes.json', JSON.stringify(dados, null, 2));
 
-        // ── AUTO-BAN POR WARNS ──
         const sc = getConfig(guildId);
         if (tipo === 'warns' && sc.autoPunicaoWarns) {
             const limite = parseInt(sc.autoPunicaoWarns) || 3;
@@ -287,7 +323,7 @@ function registrarInfracao(guildId, userId, tipo, motivo) {
 }
 
 function isWhitelisted(sc, userId, guild) {
-    if (userId === OWNER_ID || userId === guild.ownerId) return true;
+    if (ehDono(userId) || userId === guild.ownerId) return true;
     if (!sc.whitelistIds) return false;
     const ids = sc.whitelistIds.split(',').map(s => s.trim());
     return ids.includes(userId);
@@ -326,12 +362,10 @@ setInterval(() => {
             const intervalo = parseInt(sc.horasLimpeza) * 60 * 60 * 1000;
             const ultimaLimpeza = sc._ultimaLimpeza || 0;
             if (Date.now() - ultimaLimpeza < intervalo) continue;
-
             const guild = client.guilds.cache.get(guildId);
             if (!guild) continue;
             const canal = guild.channels.cache.get(sc.logChannelId);
             if (!canal) continue;
-
             canal.bulkDelete(100, true).catch(() => {});
             configs[guildId]._ultimaLimpeza = Date.now();
             fs.writeFileSync('./database/config.json', JSON.stringify(configs, null, 2));
@@ -345,6 +379,7 @@ client.once('ready', () => {
     console.log('==================================================');
     console.log(`🛡️   RETH MORGAN SHIELD SYSTEM V8 ONLINE`);
     console.log(`🔗 Logado como: ${client.user.tag}`);
+    console.log(`🤖 IA: Groq (llama-3.3-70b-versatile)`);
     console.log(`🌐 Painel web: http://localhost:${port}`);
     console.log('==================================================');
 
@@ -352,9 +387,9 @@ client.once('ready', () => {
         { name: 'r!painel | Proteger Servidores 🛡️', type: 3 },
         { name: `Segurança Máxima em ${client.guilds.cache.size} servidores! 🏢`, type: 0 },
         { name: 'Protocolo Anti-Nuke Ativo ☢️', type: 2 },
-        { name: 'Desenvolvido por PT 👑', type: 0 },
+        { name: 'Desenvolvido por nossos donos 👑', type: 0 },
         { name: 'RETH MORGAN: Executando o caos. Codificando a ordem.', type: 2 },
-        { name: 'Use d!help para ver meus comandos 🚀', type: 0 }
+        { name: 'Use d!setup pra me adicionar na sua ordem! 🚀', type: 0 }
     ];
     let idx = 0;
     setInterval(() => {
@@ -447,7 +482,6 @@ client.on('guildMemberRemove', async (member) => {
     const guild = member.guild;
     const sc = getConfig(guild.id);
 
-    // Log de saída
     if (sc.logs_join) {
         const leaveEmbed = new EmbedBuilder()
             .setColor('#e74c3c')
@@ -457,7 +491,6 @@ client.on('guildMemberRemove', async (member) => {
         enviarLog(guild, 'logs_join', leaveEmbed);
     }
 
-    // Anti-Mass Kick
     if (!sc.antiMassKick) return;
     try {
         const limite = parseInt(sc.maxKicks) || 5;
@@ -495,19 +528,16 @@ client.on('guildMemberAdd', async (member) => {
     const guild = member.guild;
     const sc = getConfig(guild.id);
 
-    // Auto-role
     if (sc.autorole) {
         const cargoAlvo = guild.roles.cache.get(sc.autorole);
         if (cargoAlvo) await member.roles.add(cargoAlvo).catch(() => {});
     }
 
-    // Mensagem de boas-vindas
     if (sc.msg_join) {
         const canalPublico = guild.channels.cache.get(sc.msg_join);
         if (canalPublico) canalPublico.send(`👋 Bem-vindo(a) <@${member.id}> ao servidor **${guild.name}**! Aproveite o chat!`).catch(() => {});
     }
 
-    // Log de entrada
     if (sc.logs_join) {
         const joinEmbed = new EmbedBuilder()
             .setColor('#2ecc71')
@@ -517,7 +547,6 @@ client.on('guildMemberAdd', async (member) => {
         enviarLog(guild, 'logs_join', joinEmbed);
     }
 
-    // Anti-bot
     if (member.user.bot && (sc.antibot || sc.bloqueioBots)) {
         try {
             await new Promise(r => setTimeout(r, 1000));
@@ -539,7 +568,7 @@ client.on('guildMemberAdd', async (member) => {
                     .setDescription(`<@${executor.id}> tentou injetar um bot no servidor.`)
                     .addFields(
                         { name: '🤖 Bot Invasor', value: `\`${member.user.tag}\` (${member.id})`, inline: true },
-                        { name: '🔨 Punição', value: '`Banido / Permissões Cassadas`', inline: true }
+                        { name: '🔨 Punição',     value: '`Banido / Permissões Cassadas`', inline: true }
                     ).setTimestamp();
                 enviarLog(guild, 'logs_seguranca', logBotEmbed);
             }
@@ -547,7 +576,6 @@ client.on('guildMemberAdd', async (member) => {
         return;
     }
 
-    // Anti-fake
     if (sc.antifake && !member.user.bot) {
         const contaCriadaHa = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
         const limiteDias = parseInt(sc.diasFake) || 7;
@@ -565,7 +593,6 @@ client.on('guildMemberAdd', async (member) => {
         }
     }
 
-    // Auto-mod de nomes
     if (sc.autoModNomes && !member.user.bot) {
         const nick = member.displayName;
         const temInvisivel = /[\u200b\u200c\u200d\u0000-\u001f\u007f-\u009f]/.test(nick);
@@ -624,15 +651,15 @@ client.on('messageCreate', async (message) => {
     } catch (e) {}
     if (!data.canaisComandos) data.canaisComandos = [];
 
-    const sc = getConfig(message.guild.id);
+    const sc             = getConfig(message.guild.id);
     const canalPermitido = data.canaisComandos.length === 0 || data.canaisComandos.includes(message.channel.id);
-    const temPermissao = message.member?.permissions.has(PermissionsBitField.Flags.ManageMessages);
-    const ehDono = message.author.id === OWNER_ID;
+    const temPermissao   = message.member?.permissions.has(PermissionsBitField.Flags.ManageMessages);
+    const isDono         = ehDono(message.author.id);
 
     // ── ANTI-FLOOD ──
     if (sc.antiflood && !temPermissao) {
         const limite = parseInt(sc.limiteFlood) || 5;
-        const agora = Date.now();
+        const agora  = Date.now();
         const userId = message.author.id;
         if (!floodMap.has(userId)) floodMap.set(userId, []);
         const msgs = floodMap.get(userId).filter(t => agora - t < 4000);
@@ -648,7 +675,6 @@ client.on('messageCreate', async (message) => {
 
     // ── ANTI-LINK ──
     if (sc.antilink && !temPermissao) {
-        // Verifica domínios banidos ou qualquer link
         const temLink = /https?:\/\/[^\s]+/.test(message.content);
         if (temLink) {
             const dominiosBanidos = sc.filtroLinks
@@ -681,7 +707,7 @@ client.on('messageCreate', async (message) => {
     // ── ANTI-CAPS ──
     if ((sc.anticaps || sc.antiCapsLock) && message.content.length > 10 && !temPermissao) {
         const maiusculas = message.content.replace(/[^A-Z]/g, '').length;
-        const total = message.content.replace(/[^a-zA-Z]/g, '').length;
+        const total      = message.content.replace(/[^a-zA-Z]/g, '').length;
         if (total > 0 && (maiusculas / total) > 0.7) {
             await message.delete().catch(() => {});
             const aviso = await message.channel.send(`🔠 <@${message.author.id}>, evite CAPS LOCK em excesso!`).catch(() => {});
@@ -715,7 +741,7 @@ client.on('messageCreate', async (message) => {
 
     // ── FILTRO DE EMOJIS ──
     if (sc.filtroEmojis && !temPermissao) {
-        const maxEmojis = parseInt(sc.maxEmojis) || 10;
+        const maxEmojis  = parseInt(sc.maxEmojis) || 10;
         const emojiCount = (message.content.match(/<a?:\w+:\d+>|[\u{1F300}-\u{1FAFF}]/gu) || []).length;
         if (emojiCount > maxEmojis) {
             await message.delete().catch(() => {});
@@ -727,7 +753,7 @@ client.on('messageCreate', async (message) => {
 
     // ── LIMITE DE MENÇÕES ──
     if (sc.limiteMencoes && !temPermissao) {
-        const limite = parseInt(sc.limiteMencoes) || 5;
+        const limite  = parseInt(sc.limiteMencoes) || 5;
         const mencoes = message.mentions.users.size + message.mentions.roles.size;
         if (mencoes > limite) {
             await message.delete().catch(() => {});
@@ -738,7 +764,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // ── AUTO-MOD DE NOMES (verificação por mensagem) ──
+    // ── AUTO-MOD DE NOMES ──
     if (sc.autoModNomes && message.member && !message.member.user.bot) {
         const nick = message.member.displayName;
         const temInvisivel = /[\u200b\u200c\u200d\u0000-\u001f]/.test(nick);
@@ -750,7 +776,7 @@ client.on('messageCreate', async (message) => {
     // ── DETECTOR DE SELFBOTS ──
     if (sc.detectorSelfbots && !temPermissao) {
         const userId = message.author.id;
-        const agora = Date.now();
+        const agora  = Date.now();
         if (!selfbotMap.has(userId)) selfbotMap.set(userId, { msgs: [], identical: 0, lastMsg: '' });
         const dados = selfbotMap.get(userId);
         dados.msgs = dados.msgs.filter(t => agora - t < 5000);
@@ -758,7 +784,6 @@ client.on('messageCreate', async (message) => {
         if (message.content === dados.lastMsg) dados.identical++;
         else { dados.identical = 0; dados.lastMsg = message.content; }
 
-        // Suspeito: +10 msgs em 5s OU 5 msgs idênticas seguidas
         if (dados.msgs.length >= 10 || dados.identical >= 5) {
             await message.member.timeout(1000 * 60 * 30, 'Reth Morgan: Comportamento suspeito de selfbot').catch(() => {});
             selfbotMap.delete(userId);
@@ -773,9 +798,9 @@ client.on('messageCreate', async (message) => {
 
     // ── COMANDOS ──
     if (canalPermitido && message.content.startsWith(PREFIX)) {
-        const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+        const args        = message.content.slice(PREFIX.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
-        const command = client.commands.get(commandName)
+        const command     = client.commands.get(commandName)
             || client.commands.find(cmd => cmd.aliases && cmd.aliases.includes(commandName));
         if (command) {
             try { await command.execute(message, args, client, OWNER_ID); }
@@ -791,21 +816,21 @@ client.on('messageCreate', async (message) => {
     const morganAtiva = sc.morgan_ativo === true;
     const canalMorgan = sc.morgan_canal || null;
 
-    if (!morganAtiva && !ehDono) return;
+    if (!morganAtiva && !isDono) return;
 
     const contemMorgan    = message.content.toLowerCase().includes('morgan');
     const comecaComMorgan = message.content.toLowerCase().trim().startsWith('morgan');
     const marcouOBot      = message.mentions.has(client.user);
     const noCanaldaMorgan = canalMorgan && message.channel.id === canalMorgan;
 
-    const deveAtivarIA = marcouOBot || comecaComMorgan || noCanaldaMorgan || (ehDono && contemMorgan);
+    const deveAtivarIA = marcouOBot || comecaComMorgan || noCanaldaMorgan || (isDono && contemMorgan);
     if (!deveAtivarIA) return;
 
     try {
         let perguntaLimpa = message.content;
         if (marcouOBot) perguntaLimpa = perguntaLimpa.split('<@' + client.user.id + '>').join('');
         const textoMinusculo = perguntaLimpa.toLowerCase();
-        const posicaoMorgan = textoMinusculo.indexOf('morgan');
+        const posicaoMorgan  = textoMinusculo.indexOf('morgan');
         if (posicaoMorgan !== -1) perguntaLimpa = perguntaLimpa.slice(0, posicaoMorgan) + perguntaLimpa.slice(posicaoMorgan + 6);
         perguntaLimpa = perguntaLimpa.trim();
         if (perguntaLimpa.startsWith(',')) perguntaLimpa = perguntaLimpa.slice(1).trim();
@@ -814,35 +839,51 @@ client.on('messageCreate', async (message) => {
 
         await message.channel.sendTyping();
 
-        const diretrizesIA = `Você é a Reth Morgan, assistente pessoal de desenvolvimento e segurança do PT.
-Sua personalidade é extremamente direta, rápida, sem enrolação e sem palavras difíceis.
+        const diretrizesIA = `Você é a Reth Morgan, assistente de segurança e desenvolvimento.
+Personalidade: direta, rápida, sem enrolação, sem palavras difíceis.
 
-CONDIÇÃO DE SEGURANÇA:
-Quem está falando com você agora é o seu criador (PT)? Resposta: ${ehDono ? "SIM, É O PT." : "NÃO, É UM USUÁRIO COMUM."}
+QUEM ESTÁ FALANDO: ${isDono ? "UM DOS DONOS DO BOT." : "UM USUÁRIO COMUM."}
 
-Se o PT (e APENAS o PT) te der uma ordem direta, você pode executar três ações especiais respondendo rigorosamente em formato JSON simples:
+Se for um dos donos, execute as ações abaixo respondendo SOMENTE com JSON puro. Sem texto antes ou depois. Sem markdown. Sem crases.
 
-1. ORDEM DE BANIMENTO:
-{ "acao": "ban", "alvo": "ID_OU_MENCAO_DO_ALVO", "motivo": "Motivo deduzido", "resposta_chat": "Pronto, PT. Usuário banido." }
+1. BAN:
+{ "acao": "ban", "motivo": "motivo deduzido", "resposta_chat": "Feito." }
 
-2. ORDEM DE LIMPAR CHAT:
-{ "acao": "clear", "quantidade": 100, "resposta_chat": "Chat limpo com sucesso, PT!" }
+2. LIMPAR CHAT:
+{ "acao": "clear", "quantidade": 100, "resposta_chat": "Feito." }
 
-3. ORDEM DE CRIAR COMANDO:
+3. ADICIONAR CARGO:
+{ "acao": "addRole", "cargo": "nome ou id do cargo", "resposta_chat": "Feito." }
+
+4. REMOVER CARGO ESPECÍFICO:
+{ "acao": "removeRole", "cargo": "nome ou id do cargo", "resposta_chat": "Feito." }
+
+5. REMOVER TODOS OS CARGOS:
+{ "acao": "removeAllRoles", "resposta_chat": "Feito." }
+
+6. CRIAR COMANDO:
 [CRIAR_COMANDO]
-<nome_arquivo>nome_do_comando.js</nome_arquivo>
+<nome_arquivo>nome.js</nome_arquivo>
 <categoria_pasta>utilitarios</categoria_pasta>
-<resposta_chat>Comando criado e ativado, PT!</resposta_chat>
+<resposta_chat>Pronto.</resposta_chat>
 <codigo_js>
-const { EmbedBuilder } = require('discord.js');
 module.exports = { name: 'nome', execute(message, args, client) { } };
 </codigo_js>
 
-Se quem falou NÃO for o PT, responda de forma curta e direta.`;
+REGRAS:
+- O alvo é sempre quem foi mencionado na mensagem com @.
+- O cargo é sempre o que foi mencionado ou descrito na mensagem.
+- Frases para removeAllRoles: "tire todos os cargos", "remove tudo", "limpa os cargos", "cassa os cargos".
+- Frases para addRole: "dá o cargo X", "adiciona o cargo X", "bota o cargo X".
+- Frases para removeRole: "tira o cargo X", "remove o cargo X".
+- Responda SOMENTE com JSON quando for executar uma ação. Sem explicações extras.
+- Se não for um dos donos, responda curto e direto, sem executar nada.`;
 
-        const respostaIA = await perguntarParaIA(perguntaLimpa, diretrizesIA);
+        // ✅ ALTERADO: passa o ID do canal para habilitar contexto multi-turno na Groq
+        const respostaIA = await perguntarParaIA(perguntaLimpa, diretrizesIA, message.channel.id);
         let textoResposta = respostaIA.trim();
 
+        // Limpeza de markdown
         const crasesMarkdown = '\`\`\`';
         if (textoResposta.startsWith(crasesMarkdown)) {
             textoResposta = textoResposta.slice(3).trim();
@@ -850,31 +891,122 @@ Se quem falou NÃO for o PT, responda de forma curta e direta.`;
             if (textoResposta.endsWith(crasesMarkdown)) textoResposta = textoResposta.slice(0, -3).trim();
         }
 
+        // ── EXECUÇÃO DE ORDENS JSON ──
         if (textoResposta.startsWith('{') && textoResposta.includes('"acao"')) {
             try {
                 const ordem = JSON.parse(textoResposta);
-                if (ordem.acao === 'ban' && ehDono) {
+
+                // ── BAN ──
+                if (ordem.acao === 'ban' && isDono) {
                     const membroAlvo = message.mentions.members.first();
-                    if (!membroAlvo) return message.reply("⚠️ Você precisa marcar (@) quem quer banir.");
-                    if (membroAlvo.id === OWNER_ID) return message.reply("⚠️ Não posso banir você, PT.");
-                    await membroAlvo.ban({ reason: `IA Morgan: ${ordem.motivo}` });
-                    registrarInfracao(message.guild.id, membroAlvo.id, 'bans', `IA Morgan: ${ordem.motivo}`);
+                    if (!membroAlvo) return message.reply("⚠️ Marque quem quer banir.");
+                    if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso banir um dos donos.");
+                    await membroAlvo.ban({ reason: `Morgan: ${ordem.motivo || 'Ordem do dono'}` });
+                    registrarInfracao(message.guild.id, membroAlvo.id, 'bans', `Morgan: ${ordem.motivo || 'Ordem do dono'}`);
                     return message.reply(`🔨 ${ordem.resposta_chat}`);
                 }
-                if (ordem.acao === 'clear' && ehDono) {
+
+                // ── CLEAR ──
+                if (ordem.acao === 'clear' && isDono) {
                     let qtd = parseInt(ordem.quantidade) || 100;
-                    if (qtd < 1) qtd = 1; if (qtd > 100) qtd = 100;
+                    if (qtd < 1) qtd = 1;
+                    if (qtd > 100) qtd = 100;
                     await message.delete().catch(() => {});
                     const deletadas = await message.channel.bulkDelete(qtd, true).catch(() => null);
                     if (!deletadas) return message.channel.send("⚠️ Mensagens com mais de 14 dias não podem ser limpas em massa.");
                     const conf = await message.channel.send(`🧹 ${ordem.resposta_chat} (\`${deletadas.size}\` mensagens)`);
                     setTimeout(() => conf.delete().catch(() => {}), 5000);
+                    // ✅ Limpa o histórico do canal após clear para não confundir o contexto da IA
+                    limparHistoricoCanal(message.channel.id);
                     return;
                 }
-            } catch (e) { console.error("Erro ao decodificar JSON de ordem:", e); }
+
+                // ── ADD ROLE ──
+                if (ordem.acao === 'addRole' && isDono) {
+                    const membroAlvo = message.mentions.members.first();
+                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
+
+                    let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
+                        || message.guild.roles.cache.find(r => r.name.toLowerCase() === (ordem.cargo || '').toLowerCase());
+                    if (!cargoAlvo && ordem.cargo) {
+                        const matchId = ordem.cargo.match(/\d{17,20}/);
+                        if (matchId) cargoAlvo = message.guild.roles.cache.get(matchId[0]);
+                    }
+                    if (!cargoAlvo && message.mentions.roles.size > 0) cargoAlvo = message.mentions.roles.first();
+                    if (!cargoAlvo) return message.reply("⚠️ Cargo não encontrado.");
+
+                    try {
+                        await membroAlvo.roles.add(cargoAlvo, 'Morgan: Ordem do dono');
+                        const logEmbed = new EmbedBuilder()
+                            .setColor('#2ecc71').setTitle('🔰 CARGO ADICIONADO PELA IA')
+                            .addFields(
+                                { name: '👤 Usuário', value: `<@${membroAlvo.id}>`, inline: true },
+                                { name: '🎭 Cargo',   value: `<@&${cargoAlvo.id}>`, inline: true }
+                            ).setTimestamp();
+                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
+                        return message.reply(`🔰 ${ordem.resposta_chat}`);
+                    } catch (e) {
+                        return message.reply("❌ Sem permissão ou cargo acima do bot na hierarquia.");
+                    }
+                }
+
+                // ── REMOVE ROLE ──
+                if (ordem.acao === 'removeRole' && isDono) {
+                    const membroAlvo = message.mentions.members.first();
+                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
+
+                    let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
+                        || message.guild.roles.cache.find(r => r.name.toLowerCase() === (ordem.cargo || '').toLowerCase());
+                    if (!cargoAlvo && ordem.cargo) {
+                        const matchId = ordem.cargo.match(/\d{17,20}/);
+                        if (matchId) cargoAlvo = message.guild.roles.cache.get(matchId[0]);
+                    }
+                    if (!cargoAlvo && message.mentions.roles.size > 0) cargoAlvo = message.mentions.roles.first();
+                    if (!cargoAlvo) return message.reply("⚠️ Cargo não encontrado.");
+
+                    try {
+                        await membroAlvo.roles.remove(cargoAlvo, 'Morgan: Ordem do dono');
+                        const logEmbed = new EmbedBuilder()
+                            .setColor('#e74c3c').setTitle('🔰 CARGO REMOVIDO PELA IA')
+                            .addFields(
+                                { name: '👤 Usuário', value: `<@${membroAlvo.id}>`, inline: true },
+                                { name: '🎭 Cargo',   value: `<@&${cargoAlvo.id}>`, inline: true }
+                            ).setTimestamp();
+                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
+                        return message.reply(`🔰 ${ordem.resposta_chat}`);
+                    } catch (e) {
+                        return message.reply("❌ Sem permissão ou cargo acima do bot na hierarquia.");
+                    }
+                }
+
+                // ── REMOVE ALL ROLES ──
+                if (ordem.acao === 'removeAllRoles' && isDono) {
+                    const membroAlvo = message.mentions.members.first();
+                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
+                    if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso remover cargos de um dos donos.");
+
+                    try {
+                        const cargosRemoviveis = membroAlvo.roles.cache.filter(r => r.id !== message.guild.id && !r.managed);
+                        if (cargosRemoviveis.size === 0) return message.reply("⚠️ Esse usuário não tem cargos removíveis.");
+                        await membroAlvo.roles.remove(cargosRemoviveis, 'Morgan: Ordem do dono');
+                        const logEmbed = new EmbedBuilder()
+                            .setColor('#e74c3c').setTitle('🔰 TODOS OS CARGOS REMOVIDOS PELA IA')
+                            .addFields(
+                                { name: '👤 Usuário',          value: `<@${membroAlvo.id}>`, inline: true },
+                                { name: '🎭 Cargos removidos', value: `\`${cargosRemoviveis.size}\``, inline: true }
+                            ).setTimestamp();
+                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
+                        return message.reply(`🔰 ${ordem.resposta_chat}`);
+                    } catch (e) {
+                        return message.reply("❌ Sem permissão ou hierarquia insuficiente.");
+                    }
+                }
+
+            } catch (e) { console.error("Erro ao decodificar ordem JSON:", e); }
         }
 
-        if (textoResposta.includes('[CRIAR_COMANDO]') && ehDono) {
+        // ── CRIAR COMANDO ──
+        if (textoResposta.includes('[CRIAR_COMANDO]') && isDono) {
             try {
                 const extrairTag = (tag, texto) => {
                     const ini = texto.indexOf('<' + tag + '>');
@@ -884,7 +1016,7 @@ Se quem falou NÃO for o PT, responda de forma curta e direta.`;
                 };
                 const nomeArquivo  = extrairTag('nome_arquivo', textoResposta);
                 const categoria    = (extrairTag('categoria_pasta', textoResposta) || 'utilitarios').toLowerCase();
-                const respostaChat = extrairTag('resposta_chat', textoResposta) || 'Comando criado, PT!';
+                const respostaChat = extrairTag('resposta_chat', textoResposta) || 'Pronto.';
                 const codigoJs     = extrairTag('codigo_js', textoResposta);
                 if (nomeArquivo && codigoJs) {
                     const nomeFinal      = nomeArquivo.endsWith('.js') ? nomeArquivo : `${nomeArquivo}.js`;
@@ -899,8 +1031,8 @@ Se quem falou NÃO for o PT, responda de forma curta e direta.`;
                     return message.reply(`⚙️ **[Compilador]** ${respostaChat}\n\`commands/${categoria}/${nomeFinal}\``);
                 }
             } catch (e) {
-                console.error("Erro no compilador por tags:", e);
-                return message.reply("❌ Não consegui compilar o comando.");
+                console.error("Erro no compilador:", e);
+                return message.reply("❌ Erro ao compilar o comando.");
             }
         }
 
