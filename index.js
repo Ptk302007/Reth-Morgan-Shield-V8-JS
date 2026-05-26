@@ -389,7 +389,7 @@ client.once('ready', () => {
         { name: 'Protocolo Anti-Nuke Ativo ☢️', type: 2 },
         { name: 'Desenvolvido por nossos donos 👑', type: 0 },
         { name: 'RETH MORGAN: Executando o caos. Codificando a ordem.', type: 2 },
-        { name: 'Use d!setup pra me adicionar na sua ordem! 🚀', type: 0 }
+        { name: 'Use r!setup pra me adicionar na sua ordem! 🚀', type: 0 }
     ];
     let idx = 0;
     setInterval(() => {
