@@ -13,8 +13,8 @@ const path       = require('path');
 const app  = express();
 const port = process.env.PORT || 10000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(session({
     secret: process.env.SESSION_SECRET || 'reth_morgan_secret_v8',
     resave: false,
@@ -118,6 +118,29 @@ app.get('/api/config/:guildId', requireLogin, (req, res) => {
     } catch (e) { res.json({}); }
 });
 
+app.post('/api/chat', requireLogin, async (req, res) => {
+    const { mensagem, historico, sistema, imagemBase64, mimeType } = req.body;
+ 
+    if (!mensagem && !imagemBase64) {
+        return res.status(400).json({ error: 'Mensagem ou imagem obrigatória.' });
+    }
+ 
+    try {
+        const sessionId = `web_${req.session.user.id}`;
+        const resposta  = await perguntarParaIA(
+            mensagem  || "Descreva esta imagem.",
+            sistema   || "",
+            sessionId,
+            imagemBase64 || null,
+            mimeType     || "image/jpeg"
+        );
+        res.json({ resposta: resposta.trim() });
+    } catch (e) {
+        console.error('[API Chat]', e);
+        res.status(500).json({ error: 'Erro ao processar resposta da IA.' });
+    }
+});
+
 app.post('/api/config/save', requireLogin, (req, res) => {
     const { guildId, ...novaConfig } = req.body;
     const temAcesso = req.session.guilds?.some(g => g.id === guildId);
@@ -165,23 +188,6 @@ app.get('/chat', requireLogin, (req, res) => {
     res.send(chatHtml);
 });
 
-// ── ROTA DE CHAT DO PAINEL (usa Groq diretamente) ──
-app.post('/api/chat', requireLogin, async (req, res) => {
-    const { mensagem, historico, sistema } = req.body;
-    if (!mensagem || typeof mensagem !== 'string') {
-        return res.status(400).json({ error: 'Mensagem inválida.' });
-    }
-    try {
-        // Passa o ID da sessão como "canal" para manter contexto no painel
-        const sessionId = `web_${req.session.user.id}`;
-        const resposta = await perguntarParaIA(mensagem, sistema, sessionId);
-        res.json({ resposta: resposta.trim() });
-    } catch (e) {
-        console.error('[API Chat]', e);
-        res.status(500).json({ error: 'Erro ao processar resposta da IA.' });
-    }
-});
-
 app.get('/auth/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/');
@@ -224,7 +230,7 @@ const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, Perm
 // ✅ ALTERADO: importa do groq.js em vez do gemini.js
 const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
-const PREFIX = 'r!';
+const PREFIX = 'd!';
 
 // ── DONOS DO BOT ──
 const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
@@ -389,7 +395,7 @@ client.once('ready', () => {
         { name: 'Protocolo Anti-Nuke Ativo ☢️', type: 2 },
         { name: 'Desenvolvido por nossos donos 👑', type: 0 },
         { name: 'RETH MORGAN: Executando o caos. Codificando a ordem.', type: 2 },
-        { name: 'Use r!setup pra me adicionar na sua ordem! 🚀', type: 0 }
+        { name: 'Use d!setup pra me adicionar na sua ordem! 🚀', type: 0 }
     ];
     let idx = 0;
     setInterval(() => {
@@ -630,7 +636,7 @@ client.on('channelDelete', async (channel) => {
             }
             const embedAlerta = new EmbedBuilder()
                 .setColor('#f53b57').setTitle('🚨 ANTI-NUKE ACIONADO: PROTEÇÃO DE CANAIS')
-                .setDescription(`<@${executor.id}> tentou deletar múltiplos canais. Privilégios revogados.`)
+                .setDescription(`<@${executor.id}> tentou deletar múltiplos canais. Privilégios cassados.`)
                 .setTimestamp();
             enviarLog(guild, 'logs_seguranca', embedAlerta);
         }
