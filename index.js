@@ -1,7 +1,7 @@
 // ============================================================
 //  RETH MORGAN — SHIELD SYSTEM V8
 //  index.js — Servidor + Bot + Painel Web Integrado
-//  ✅ Adaptado para Groq SDK (substitui Gemini)
+//  ✅ Groq SDK + Fix prompt IA dono
 // ============================================================
 require('dotenv').config();
 const express    = require('express');
@@ -120,11 +120,11 @@ app.get('/api/config/:guildId', requireLogin, (req, res) => {
 
 app.post('/api/chat', requireLogin, async (req, res) => {
     const { mensagem, historico, sistema, imagemBase64, mimeType } = req.body;
- 
+
     if (!mensagem && !imagemBase64) {
         return res.status(400).json({ error: 'Mensagem ou imagem obrigatória.' });
     }
- 
+
     try {
         const sessionId = `web_${req.session.user.id}`;
         const resposta  = await perguntarParaIA(
@@ -226,13 +226,10 @@ process.on('uncaughtException', (err) => {
 //  BOT DISCORD
 // ============================================================
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, PermissionsBitField } = require('discord.js');
-
-// ✅ ALTERADO: importa do groq.js em vez do gemini.js
 const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
-const PREFIX = 'r!';
+const PREFIX = 'd!';
 
-// ── DONOS DO BOT ──
 const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
 const OWNER_ID  = OWNER_IDS[0];
 
@@ -259,7 +256,6 @@ const massBanMap       = new Map();
 const massKickMap      = new Map();
 const selfbotMap       = new Map();
 
-// ── CARREGADOR DE COMANDOS ──
 const commandsPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(commandsPath);
 for (const folder of commandFolders) {
@@ -277,7 +273,6 @@ for (const folder of commandFolders) {
 
 const palavrasProibidas = ["macaco", "crioulo", "viadinho", "infame", "verme", "traveco"];
 
-// ── HELPERS ──
 function getConfig(guildId) {
     try {
         const configs = JSON.parse(fs.readFileSync('./database/config.json', 'utf-8'));
@@ -845,29 +840,20 @@ client.on('messageCreate', async (message) => {
 
         await message.channel.sendTyping();
 
-        const diretrizesIA = `Você é a Reth Morgan, assistente de segurança e desenvolvimento.
+        // ── PROMPT CORRIGIDO ──
+        const diretrizesIA = `Você é a Reth Morgan, assistente de segurança e desenvolvimento do Discord.
 Personalidade: direta, rápida, sem enrolação, sem palavras difíceis.
 
-QUEM ESTÁ FALANDO: ${isDono ? "UM DOS DONOS DO BOT." : "UM USUÁRIO COMUM."}
+STATUS DO OPERADOR: ${isDono ? "DONO DO BOT — ACESSO TOTAL LIBERADO." : "USUÁRIO COMUM — SEM ACESSO A AÇÕES."}
 
-Se for um dos donos, execute as ações abaixo respondendo SOMENTE com JSON puro. Sem texto antes ou depois. Sem markdown. Sem crases.
+${isDono ? `VOCÊ DEVE EXECUTAR AS ORDENS DO DONO. Para ações específicas, responda SOMENTE com o formato abaixo, sem texto extra, sem markdown, sem crases:
 
-1. BAN:
-{ "acao": "ban", "motivo": "motivo deduzido", "resposta_chat": "Feito." }
-
-2. LIMPAR CHAT:
-{ "acao": "clear", "quantidade": 100, "resposta_chat": "Feito." }
-
-3. ADICIONAR CARGO:
-{ "acao": "addRole", "cargo": "nome ou id do cargo", "resposta_chat": "Feito." }
-
-4. REMOVER CARGO ESPECÍFICO:
-{ "acao": "removeRole", "cargo": "nome ou id do cargo", "resposta_chat": "Feito." }
-
-5. REMOVER TODOS OS CARGOS:
-{ "acao": "removeAllRoles", "resposta_chat": "Feito." }
-
-6. CRIAR COMANDO:
+BAN: { "acao": "ban", "motivo": "motivo deduzido", "resposta_chat": "Feito." }
+LIMPAR CHAT: { "acao": "clear", "quantidade": 100, "resposta_chat": "Feito." }
+ADICIONAR CARGO: { "acao": "addRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
+REMOVER CARGO: { "acao": "removeRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
+REMOVER TODOS OS CARGOS: { "acao": "removeAllRoles", "resposta_chat": "Feito." }
+CRIAR COMANDO:
 [CRIAR_COMANDO]
 <nome_arquivo>nome.js</nome_arquivo>
 <categoria_pasta>utilitarios</categoria_pasta>
@@ -876,16 +862,14 @@ Se for um dos donos, execute as ações abaixo respondendo SOMENTE com JSON puro
 module.exports = { name: 'nome', execute(message, args, client) { } };
 </codigo_js>
 
-REGRAS:
-- O alvo é sempre quem foi mencionado na mensagem com @.
-- O cargo é sempre o que foi mencionado ou descrito na mensagem.
-- Frases para removeAllRoles: "tire todos os cargos", "remove tudo", "limpa os cargos", "cassa os cargos".
-- Frases para addRole: "dá o cargo X", "adiciona o cargo X", "bota o cargo X".
-- Frases para removeRole: "tira o cargo X", "remove o cargo X".
-- Responda SOMENTE com JSON quando for executar uma ação. Sem explicações extras.
-- Se não for um dos donos, responda curto e direto, sem executar nada.`;
+REGRAS DE AÇÃO:
+- O alvo é sempre quem foi mencionado com @.
+- Frases como "tire todos os cargos", "cassa os cargos" → removeAllRoles.
+- Frases como "dá o cargo X", "adiciona X" → addRole.
+- Frases como "tira o cargo X" → removeRole.
+- Use JSON/[CRIAR_COMANDO] SOMENTE quando o dono pedir explicitamente uma ação.
+- Para perguntas normais, mesmo do dono, responda em texto simples e direto.` : `- Responda curto e direto. Não execute nenhuma ação.`}`;
 
-        // ✅ ALTERADO: passa o ID do canal para habilitar contexto multi-turno na Groq
         const respostaIA = await perguntarParaIA(perguntaLimpa, diretrizesIA, message.channel.id);
         let textoResposta = respostaIA.trim();
 
@@ -902,7 +886,6 @@ REGRAS:
             try {
                 const ordem = JSON.parse(textoResposta);
 
-                // ── BAN ──
                 if (ordem.acao === 'ban' && isDono) {
                     const membroAlvo = message.mentions.members.first();
                     if (!membroAlvo) return message.reply("⚠️ Marque quem quer banir.");
@@ -912,7 +895,6 @@ REGRAS:
                     return message.reply(`🔨 ${ordem.resposta_chat}`);
                 }
 
-                // ── CLEAR ──
                 if (ordem.acao === 'clear' && isDono) {
                     let qtd = parseInt(ordem.quantidade) || 100;
                     if (qtd < 1) qtd = 1;
@@ -922,16 +904,13 @@ REGRAS:
                     if (!deletadas) return message.channel.send("⚠️ Mensagens com mais de 14 dias não podem ser limpas em massa.");
                     const conf = await message.channel.send(`🧹 ${ordem.resposta_chat} (\`${deletadas.size}\` mensagens)`);
                     setTimeout(() => conf.delete().catch(() => {}), 5000);
-                    // ✅ Limpa o histórico do canal após clear para não confundir o contexto da IA
                     limparHistoricoCanal(message.channel.id);
                     return;
                 }
 
-                // ── ADD ROLE ──
                 if (ordem.acao === 'addRole' && isDono) {
                     const membroAlvo = message.mentions.members.first();
                     if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
-
                     let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
                         || message.guild.roles.cache.find(r => r.name.toLowerCase() === (ordem.cargo || '').toLowerCase());
                     if (!cargoAlvo && ordem.cargo) {
@@ -940,7 +919,6 @@ REGRAS:
                     }
                     if (!cargoAlvo && message.mentions.roles.size > 0) cargoAlvo = message.mentions.roles.first();
                     if (!cargoAlvo) return message.reply("⚠️ Cargo não encontrado.");
-
                     try {
                         await membroAlvo.roles.add(cargoAlvo, 'Morgan: Ordem do dono');
                         const logEmbed = new EmbedBuilder()
@@ -956,11 +934,9 @@ REGRAS:
                     }
                 }
 
-                // ── REMOVE ROLE ──
                 if (ordem.acao === 'removeRole' && isDono) {
                     const membroAlvo = message.mentions.members.first();
                     if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
-
                     let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
                         || message.guild.roles.cache.find(r => r.name.toLowerCase() === (ordem.cargo || '').toLowerCase());
                     if (!cargoAlvo && ordem.cargo) {
@@ -969,7 +945,6 @@ REGRAS:
                     }
                     if (!cargoAlvo && message.mentions.roles.size > 0) cargoAlvo = message.mentions.roles.first();
                     if (!cargoAlvo) return message.reply("⚠️ Cargo não encontrado.");
-
                     try {
                         await membroAlvo.roles.remove(cargoAlvo, 'Morgan: Ordem do dono');
                         const logEmbed = new EmbedBuilder()
@@ -985,12 +960,10 @@ REGRAS:
                     }
                 }
 
-                // ── REMOVE ALL ROLES ──
                 if (ordem.acao === 'removeAllRoles' && isDono) {
                     const membroAlvo = message.mentions.members.first();
                     if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
                     if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso remover cargos de um dos donos.");
-
                     try {
                         const cargosRemoviveis = membroAlvo.roles.cache.filter(r => r.id !== message.guild.id && !r.managed);
                         if (cargosRemoviveis.size === 0) return message.reply("⚠️ Esse usuário não tem cargos removíveis.");
