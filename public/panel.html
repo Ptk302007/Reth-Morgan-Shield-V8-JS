@@ -33,7 +33,13 @@
   .topbar-logo span { color: var(--blood-bright); }
   .topbar-tag { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 3px; border-left: 1px solid #1a1e1a; padding-left: 20px; }
   .topbar-user { display: flex; align-items: center; gap: 10px; }
-  .topbar-avatar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--blood); object-fit: cover; filter: saturate(0.6); }
+
+  /* AVATAR CORRIGIDO */
+  .topbar-avatar-wrap { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--blood); overflow: hidden; flex-shrink: 0; background: var(--blood-dim); display: flex; align-items: center; justify-content: center; }
+  .topbar-avatar { width: 100%; height: 100%; object-fit: cover; filter: saturate(0.6); display: none; }
+  .topbar-avatar.loaded { display: block; }
+  .topbar-avatar-fallback { font-family: var(--font-display); font-size: 14px; color: var(--blood-bright); letter-spacing: 1px; line-height: 1; }
+
   .topbar-username { font-family: var(--font-mono); font-size: 12px; color: var(--text); }
   .topbar-badge { font-family: var(--font-mono); font-size: 9px; color: var(--blood-bright); border: 1px solid var(--blood-dim); background: rgba(139,0,0,0.1); padding: 3px 8px; letter-spacing: 2px; }
 
@@ -148,14 +154,19 @@
     <div class="topbar-tag">CENTRAL OPERACIONAL · SHIELD V8</div>
   </div>
   <div class="topbar-user">
-    <img id="user-avatar" src="" class="topbar-avatar" alt="Avatar">
+    <div class="topbar-avatar-wrap">
+      <img id="user-avatar" class="topbar-avatar" alt="">
+      <span id="user-avatar-fallback" class="topbar-avatar-fallback">?</span>
+    </div>
     <span id="username" class="topbar-username">Carregando...</span>
     <div class="topbar-badge">OPERADOR</div>
   </div>
 </header>
 
 <div class="shell">
+
   <nav class="sidebar">
+    <!-- INFRAESTRUTURA -->
     <div class="sidebar-section">
       <span class="sidebar-label">INFRAESTRUTURA</span>
       <div class="server-select-wrap">
@@ -164,6 +175,8 @@
         </select>
       </div>
     </div>
+
+    <!-- PROTOCOLOS -->
     <div class="sidebar-section">
       <span class="sidebar-label">PROTOCOLOS</span>
       <a class="sidebar-item active" onclick="irParaSecao('sec-antinuke', this)">
@@ -179,8 +192,24 @@
         <span class="sidebar-dot"></span>IA MORGAN
       </a>
     </div>
+
+    <!-- NAVEGAÇÃO -->
+    <div class="sidebar-section">
+      <span class="sidebar-label">NAVEGAÇÃO</span>
+      <a class="sidebar-item" href="/chat">
+        <span class="sidebar-dot" style="background:var(--blood-bright)"></span>
+        <span style="color:var(--blood-bright)">IA CHAT</span>
+      </a>
+      <a class="sidebar-item" href="/">
+        <span class="sidebar-dot"></span>PÁGINA INICIAL
+      </a>
+    </div>
+
     <div style="padding: 0 16px;">
-      <a href="/auth/logout" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 2px; text-decoration: none; transition: color 0.2s; display: block; padding: 8px 4px;" onmouseover="this.style.color='#c8cfc4'" onmouseout="this.style.color='var(--text-dim)'">← ENCERRAR SESSÃO</a>
+      <a href="/auth/logout"
+         style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:2px;text-decoration:none;transition:color 0.2s;display:block;padding:8px 4px;"
+         onmouseover="this.style.color='#c8cfc4'"
+         onmouseout="this.style.color='var(--text-dim)'">← ENCERRAR SESSÃO</a>
     </div>
   </nav>
 
@@ -211,81 +240,47 @@
           <div class="section-num">01</div>
           <div class="section-title">PROTOCOLOS ANTI-NUKE</div>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">MÓDULO ANTI-NUKE</div>
-            <div class="toggle-desc">Revoga privilégios + timeout de quem deletar 3+ canais em 10 segundos.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">MÓDULO ANTI-NUKE</div><div class="toggle-desc">Revoga privilégios + timeout de quem deletar 3+ canais em 10 segundos.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antinuke"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">TRAVA DE CONVITES</div>
-            <div class="toggle-desc">Bloqueia convites de Discord enviados no chat por membros sem permissão.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">TRAVA DE CONVITES</div><div class="toggle-desc">Bloqueia convites de Discord enviados no chat por membros sem permissão.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="travaConvites"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">BLOQUEIO DE BOTS (ANTI-BOT)</div>
-            <div class="toggle-desc">Bane bots não autorizados e o executor da injeção ilícita automaticamente.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">BLOQUEIO DE BOTS (ANTI-BOT)</div><div class="toggle-desc">Bane bots não autorizados e o executor da injeção ilícita automaticamente.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="bloqueioBots"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">ANTI-FAKE</div>
-            <div class="toggle-desc">Expulsa contas com menos dias que o mínimo configurado abaixo.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">ANTI-FAKE</div><div class="toggle-desc">Expulsa contas com menos dias que o mínimo configurado abaixo.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antifake"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="field" style="margin-top:2px;">
           <label class="field-label">IDADE MÍNIMA DA CONTA (DIAS)</label>
           <input type="number" id="diasFake" placeholder="Ex: 7">
         </div>
-
         <div class="toggle-row" style="margin-top:2px;">
-          <div class="toggle-info">
-            <div class="toggle-name">DETECTOR DE SELFBOTS</div>
-            <div class="toggle-desc">Timeout de 30 min para contas com padrão suspeito: +10 msgs em 5s ou 5 msgs idênticas seguidas.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">DETECTOR DE SELFBOTS</div><div class="toggle-desc">Timeout de 30 min para contas com padrão suspeito: +10 msgs em 5s ou 5 msgs idênticas seguidas.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="detectorSelfbots"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="tape-sep" data-label="LIMITES DE PUNIÇÃO"></div>
-
         <div class="grid-2">
           <div>
             <div class="toggle-row">
-              <div class="toggle-info">
-                <div class="toggle-name">ANTI-MASS BAN</div>
-                <div class="toggle-desc">Suspende staff por bans em massa acima do limite em 1 minuto.</div>
-              </div>
+              <div class="toggle-info"><div class="toggle-name">ANTI-MASS BAN</div><div class="toggle-desc">Suspende staff por bans em massa acima do limite em 1 minuto.</div></div>
               <label class="toggle-switch"><input type="checkbox" id="antiMassBan"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
             </div>
-            <div class="field" style="margin-top:2px;">
-              <input type="number" id="maxBans" placeholder="Máx. bans/min (ex: 5)">
-            </div>
+            <div class="field" style="margin-top:2px;"><input type="number" id="maxBans" placeholder="Máx. bans/min (ex: 5)"></div>
           </div>
           <div>
             <div class="toggle-row">
-              <div class="toggle-info">
-                <div class="toggle-name">ANTI-MASS KICK</div>
-                <div class="toggle-desc">Suspende staff por kicks em massa acima do limite em 1 minuto.</div>
-              </div>
+              <div class="toggle-info"><div class="toggle-name">ANTI-MASS KICK</div><div class="toggle-desc">Suspende staff por kicks em massa acima do limite em 1 minuto.</div></div>
               <label class="toggle-switch"><input type="checkbox" id="antiMassKick"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
             </div>
-            <div class="field" style="margin-top:2px;">
-              <input type="number" id="maxKicks" placeholder="Máx. kicks/min (ex: 5)">
-            </div>
+            <div class="field" style="margin-top:2px;"><input type="number" id="maxKicks" placeholder="Máx. kicks/min (ex: 5)"></div>
           </div>
         </div>
-
         <div class="tape-sep" data-label="WHITELIST"></div>
         <div class="field">
           <label class="field-label">IDs CONFIÁVEIS — WHITELIST (separados por vírgula)</label>
@@ -299,70 +294,41 @@
           <div class="section-num">02</div>
           <div class="section-title">FILTROS & MODERAÇÃO</div>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">ANTI-FLOOD</div>
-            <div class="toggle-desc">Remove mensagens e avisa usuários que ultrapassem o limite em 4 segundos.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">ANTI-FLOOD</div><div class="toggle-desc">Remove mensagens e avisa usuários que ultrapassem o limite em 4 segundos.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antiflood"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="field" style="margin-top:2px;">
           <label class="field-label">LIMITE DE MENSAGENS EM 4 SEGUNDOS</label>
           <input type="number" id="limiteFlood" placeholder="Ex: 5">
         </div>
-
         <div class="toggle-row" style="margin-top:2px;">
-          <div class="toggle-info">
-            <div class="toggle-name">ANTI-LINK</div>
-            <div class="toggle-desc">Remove links enviados por usuários sem permissão. Se domínios banidos estiverem preenchidos abaixo, só bloqueia esses.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">ANTI-LINK</div><div class="toggle-desc">Remove links enviados por usuários sem permissão. Se domínios banidos estiverem preenchidos abaixo, só bloqueia esses.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antilink"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">ANTI-INVITE</div>
-            <div class="toggle-desc">Bloqueia convites de outros servidores Discord no chat.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">ANTI-INVITE</div><div class="toggle-desc">Bloqueia convites de outros servidores Discord no chat.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antiinvite"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">ANTI-PRECONCEITO</div>
-            <div class="toggle-desc">Apaga mensagens com palavras proibidas e registra um warn automático.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">ANTI-PRECONCEITO</div><div class="toggle-desc">Apaga mensagens com palavras proibidas e registra um warn automático.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antipreconceito"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">AUTO-MOD DE NOMES</div>
-            <div class="toggle-desc">Renomeia nicks com caracteres invisíveis ou nulos para "Usuário" automaticamente.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">AUTO-MOD DE NOMES</div><div class="toggle-desc">Renomeia nicks com caracteres invisíveis ou nulos para "Usuário" automaticamente.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="autoModNomes"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="grid-2">
           <div class="toggle-row">
-            <div class="toggle-info">
-              <div class="toggle-name">ANTI-CAPS</div>
-              <div class="toggle-desc">Apaga mensagens com +70% de maiúsculas acima de 10 caracteres.</div>
-            </div>
+            <div class="toggle-info"><div class="toggle-name">ANTI-CAPS</div><div class="toggle-desc">Apaga mensagens com +70% de maiúsculas acima de 10 caracteres.</div></div>
             <label class="toggle-switch"><input type="checkbox" id="antiCapsLock"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
           </div>
           <div class="toggle-row">
-            <div class="toggle-info">
-              <div class="toggle-name">ANTI-SPOILER</div>
-              <div class="toggle-desc">Remove mensagens com mais de 3 tags spoiler ||texto|| por mensagem.</div>
-            </div>
+            <div class="toggle-info"><div class="toggle-name">ANTI-SPOILER</div><div class="toggle-desc">Remove mensagens com mais de 3 tags spoiler ||texto|| por mensagem.</div></div>
             <label class="toggle-switch"><input type="checkbox" id="antiSpoiler"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
           </div>
         </div>
-
         <div class="tape-sep" data-label="LIMITES NUMÉRICOS"></div>
-
         <div class="num-pair">
           <div class="field">
             <label class="field-label">LIMITE DE MENÇÕES POR MENSAGEM</label>
@@ -373,17 +339,11 @@
             <input type="number" id="maxEmojis" placeholder="Ex: 10">
           </div>
         </div>
-
         <div class="toggle-row" style="margin-top:2px;">
-          <div class="toggle-info">
-            <div class="toggle-name">FILTRO DE EMOJIS</div>
-            <div class="toggle-desc">Ativa o limite de emojis por mensagem definido acima.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">FILTRO DE EMOJIS</div><div class="toggle-desc">Ativa o limite de emojis por mensagem definido acima.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="filtroEmojis"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="tape-sep" data-label="PUNIÇÕES AUTOMÁTICAS"></div>
-
         <div class="num-pair">
           <div class="field">
             <label class="field-label">BAN AUTOMÁTICO AO ATINGIR X WARNS</label>
@@ -394,27 +354,19 @@
             <input type="number" id="horasLimpeza" placeholder="Ex: 24">
           </div>
         </div>
-
         <div class="toggle-row" style="margin-top:2px;">
-          <div class="toggle-info">
-            <div class="toggle-name">LIMPEZA AGENDADA</div>
-            <div class="toggle-desc">Limpa automaticamente o canal de logs no intervalo configurado acima.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">LIMPEZA AGENDADA</div><div class="toggle-desc">Limpa automaticamente o canal de logs no intervalo configurado acima.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="limpezaAgendada"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="tape-sep" data-label="DOMÍNIOS & PUNIÇÕES"></div>
-
         <div class="field">
           <label class="field-label">DOMÍNIOS BANIDOS (separados por vírgula — vazio = bloqueia todos)</label>
           <input type="text" id="filtroLinks" placeholder="Ex: siteofensivo.com, linkrival.gg">
         </div>
-
         <div class="field" style="margin-top:2px;">
           <label class="field-label">MENSAGEM DE PUNIÇÃO CUSTOMIZADA (opcional)</label>
           <input type="text" id="customPunishMsg" placeholder="Texto exibido ao usuário punido">
         </div>
-
         <div class="field" style="margin-top:2px;">
           <label class="field-label">ID DO CARGO DE SILENCIAMENTO (MUTED ROLE)</label>
           <input type="text" id="mutedRoleId" placeholder="ID do cargo de mute">
@@ -427,47 +379,24 @@
           <div class="section-num">03</div>
           <div class="section-title">CANAIS & LOGS</div>
         </div>
-
         <div class="tape-sep" data-label="LOGS DE SEGURANÇA"></div>
         <div class="num-pair">
-          <div class="field">
-            <label class="field-label">CANAL DE LOGS DE SEGURANÇA</label>
-            <input type="text" id="logs_seguranca" placeholder="ID do canal">
-          </div>
-          <div class="field">
-            <label class="field-label">CANAL DE LOGS DE STAFF</label>
-            <input type="text" id="logs_staff" placeholder="ID do canal">
-          </div>
+          <div class="field"><label class="field-label">CANAL DE LOGS DE SEGURANÇA</label><input type="text" id="logs_seguranca" placeholder="ID do canal"></div>
+          <div class="field"><label class="field-label">CANAL DE LOGS DE STAFF</label><input type="text" id="logs_staff" placeholder="ID do canal"></div>
         </div>
-
         <div class="num-pair" style="margin-top:2px;">
-          <div class="field">
-            <label class="field-label">CANAL DE LOGS DE MENSAGENS</label>
-            <input type="text" id="logs_msg" placeholder="ID do canal">
-          </div>
-          <div class="field">
-            <label class="field-label">CANAL DE LOGS DE ANTI-CARGOS</label>
-            <input type="text" id="logs_anticargos" placeholder="ID do canal">
-          </div>
+          <div class="field"><label class="field-label">CANAL DE LOGS DE MENSAGENS</label><input type="text" id="logs_msg" placeholder="ID do canal"></div>
+          <div class="field"><label class="field-label">CANAL DE LOGS DE ANTI-CARGOS</label><input type="text" id="logs_anticargos" placeholder="ID do canal"></div>
         </div>
-
         <div class="tape-sep" data-label="MEMBROS & BOAS-VINDAS"></div>
         <div class="num-pair">
-          <div class="field">
-            <label class="field-label">CANAL DE LOGS JOIN/LEAVE</label>
-            <input type="text" id="logs_join" placeholder="ID do canal">
-          </div>
-          <div class="field">
-            <label class="field-label">CANAL DE BOAS-VINDAS (mensagem pública)</label>
-            <input type="text" id="msg_join" placeholder="ID do canal">
-          </div>
+          <div class="field"><label class="field-label">CANAL DE LOGS JOIN/LEAVE</label><input type="text" id="logs_join" placeholder="ID do canal"></div>
+          <div class="field"><label class="field-label">CANAL DE BOAS-VINDAS (mensagem pública)</label><input type="text" id="msg_join" placeholder="ID do canal"></div>
         </div>
-
         <div class="field" style="margin-top:2px;">
           <label class="field-label">ID DO CARGO DE AUTOROLE (cargo dado ao entrar)</label>
           <input type="text" id="autorole" placeholder="ID do cargo">
         </div>
-
         <div class="tape-sep" data-label="CANAL PRINCIPAL DE LOGS"></div>
         <div class="field">
           <label class="field-label">CANAL GERAL DE LOGS (usado para limpeza agendada)</label>
@@ -481,15 +410,10 @@
           <div class="section-num">04</div>
           <div class="section-title">IA MORGAN</div>
         </div>
-
         <div class="toggle-row">
-          <div class="toggle-info">
-            <div class="toggle-name">ATIVAR IA MORGAN</div>
-            <div class="toggle-desc">Permite que membros interajam com a IA via "morgan," ou menção ao bot neste servidor.</div>
-          </div>
+          <div class="toggle-info"><div class="toggle-name">ATIVAR IA MORGAN</div><div class="toggle-desc">Permite que membros interajam com a IA via "morgan," ou menção ao bot neste servidor.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="morgan_ativo"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
-
         <div class="field" style="margin-top:2px;">
           <label class="field-label">CANAL EXCLUSIVO DA IA (todas as mensagens aqui ativam a IA)</label>
           <input type="text" id="morgan_canal" placeholder="ID do canal (deixe vazio para desativar)">
@@ -521,6 +445,17 @@
 <script>
   /* DATA_INJECTION */
 
+  // ── AVATAR CORRIGIDO ──
+  function inicializarAvatar(username, avatarUrl) {
+    const img      = document.getElementById('user-avatar');
+    const fallback = document.getElementById('user-avatar-fallback');
+    fallback.textContent = (username || '?')[0].toUpperCase();
+    if (!avatarUrl) return;
+    img.onload  = () => { img.classList.add('loaded'); fallback.style.display = 'none'; };
+    img.onerror = () => { img.style.display = 'none'; fallback.style.display = ''; };
+    img.src = avatarUrl;
+  }
+
   function showToast(msg, tipo) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -529,7 +464,6 @@
     setTimeout(() => t.classList.remove('show'), 3500);
   }
 
-  // ── SCROLL CORRIGIDO ──
   function irParaSecao(id, el) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
@@ -541,10 +475,11 @@
     document.getElementById('username').innerText = 'Sessão expirada';
     setTimeout(() => window.location.href = '/', 1500);
   } else {
-    document.getElementById('username').innerText = window.dashboardData.username;
-    document.getElementById('user-avatar').src = window.dashboardData.avatar;
+    const { username, avatar, guilds } = window.dashboardData;
+    document.getElementById('username').innerText = username;
+    inicializarAvatar(username, avatar);
     const select = document.getElementById('serverSelect');
-    window.dashboardData.guilds.forEach(guild => {
+    guilds.forEach(guild => {
       const opt = document.createElement('option');
       opt.value = guild.id;
       opt.innerText = guild.name;
@@ -552,13 +487,11 @@
     });
   }
 
-  // ── TROCAR SERVIDOR ──
   function alternarServidor(guildId) {
     if (!guildId) return;
     document.getElementById('no-server').style.display = 'none';
     document.getElementById('management-area').style.display = 'block';
     document.getElementById('save-status').innerHTML = 'STATUS — <span>CARREGANDO...</span>';
-
     const guildName = document.getElementById('serverSelect').options[document.getElementById('serverSelect').selectedIndex].text;
     document.getElementById('guild-name-display').textContent = guildName;
 
@@ -571,53 +504,28 @@
           if (el.type === 'checkbox') el.checked = !!val;
           else el.value = val || '';
         };
-
-        // Anti-nuke
-        set('antinuke',         data.antinuke);
-        set('travaConvites',    data.travaConvites);
-        set('bloqueioBots',     data.bloqueioBots || data.antibot);
-        set('antifake',         data.antifake);
-        set('diasFake',         data.diasFake || 7);
+        set('antinuke', data.antinuke); set('travaConvites', data.travaConvites);
+        set('bloqueioBots', data.bloqueioBots || data.antibot);
+        set('antifake', data.antifake); set('diasFake', data.diasFake || 7);
         set('detectorSelfbots', data.detectorSelfbots);
-        set('antiMassBan',      data.antiMassBan);
-        set('maxBans',          data.maxBans || 5);
-        set('antiMassKick',     data.antiMassKick);
-        set('maxKicks',         data.maxKicks || 5);
-        set('whitelistIds',     data.whitelistIds);
-
-        // Filtros
-        set('antiflood',        data.antiflood);
-        set('limiteFlood',      data.limiteFlood || 5);
-        set('antilink',         data.antilink);
-        set('antiinvite',       data.antiinvite);
-        set('antipreconceito',  data.antipreconceito);
-        set('autoModNomes',     data.autoModNomes);
-        set('antiCapsLock',     data.antiCapsLock || data.anticaps);
-        set('antiSpoiler',      data.antiSpoiler);
-        set('limiteMencoes',    data.limiteMencoes || 5);
-        set('filtroEmojis',     data.filtroEmojis);
-        set('maxEmojis',        data.maxEmojis || 10);
+        set('antiMassBan', data.antiMassBan); set('maxBans', data.maxBans || 5);
+        set('antiMassKick', data.antiMassKick); set('maxKicks', data.maxKicks || 5);
+        set('whitelistIds', data.whitelistIds);
+        set('antiflood', data.antiflood); set('limiteFlood', data.limiteFlood || 5);
+        set('antilink', data.antilink); set('antiinvite', data.antiinvite);
+        set('antipreconceito', data.antipreconceito); set('autoModNomes', data.autoModNomes);
+        set('antiCapsLock', data.antiCapsLock || data.anticaps);
+        set('antiSpoiler', data.antiSpoiler); set('limiteMencoes', data.limiteMencoes || 5);
+        set('filtroEmojis', data.filtroEmojis); set('maxEmojis', data.maxEmojis || 10);
         set('autoPunicaoWarns', data.autoPunicaoWarns || 3);
-        set('limpezaAgendada',  data.limpezaAgendada);
-        set('horasLimpeza',     data.horasLimpeza || 24);
-        set('filtroLinks',      data.filtroLinks);
-        set('customPunishMsg',  data.customPunishMsg);
-        set('mutedRoleId',      data.mutedRoleId);
-
-        // Canais
-        set('logs_seguranca',   data.logs_seguranca);
-        set('logs_staff',       data.logs_staff);
-        set('logs_msg',         data.logs_msg);
-        set('logs_anticargos',  data.logs_anticargos);
-        set('logs_join',        data.logs_join);
-        set('msg_join',         data.msg_join);
-        set('autorole',         data.autorole);
-        set('logChannelId',     data.logChannelId);
-
-        // IA
-        set('morgan_ativo',     data.morgan_ativo);
-        set('morgan_canal',     data.morgan_canal);
-
+        set('limpezaAgendada', data.limpezaAgendada); set('horasLimpeza', data.horasLimpeza || 24);
+        set('filtroLinks', data.filtroLinks); set('customPunishMsg', data.customPunishMsg);
+        set('mutedRoleId', data.mutedRoleId);
+        set('logs_seguranca', data.logs_seguranca); set('logs_staff', data.logs_staff);
+        set('logs_msg', data.logs_msg); set('logs_anticargos', data.logs_anticargos);
+        set('logs_join', data.logs_join); set('msg_join', data.msg_join);
+        set('autorole', data.autorole); set('logChannelId', data.logChannelId);
+        set('morgan_ativo', data.morgan_ativo); set('morgan_canal', data.morgan_canal);
         document.getElementById('save-status').innerHTML = 'STATUS — <span>PRONTO</span>';
       })
       .catch(() => {
@@ -625,105 +533,57 @@
       });
   }
 
-  // ── SALVAR ──
   function salvarAlteracoes() {
     const guildId = document.getElementById('serverSelect').value;
     if (!guildId) return showToast('Selecione um servidor primeiro.', 'error');
-
-    const get = id => {
-      const el = document.getElementById(id);
-      if (!el) return undefined;
-      return el.type === 'checkbox' ? el.checked : el.value;
-    };
-
+    const get = id => { const el = document.getElementById(id); if (!el) return undefined; return el.type === 'checkbox' ? el.checked : el.value; };
     const payload = {
       guildId,
-      // Anti-nuke
-      antinuke:         get('antinuke'),
-      travaConvites:    get('travaConvites'),
-      bloqueioBots:     get('bloqueioBots'),
-      antibot:          get('bloqueioBots'), // compatibilidade
-      antifake:         get('antifake'),
-      diasFake:         get('diasFake'),
+      antinuke: get('antinuke'), travaConvites: get('travaConvites'),
+      bloqueioBots: get('bloqueioBots'), antibot: get('bloqueioBots'),
+      antifake: get('antifake'), diasFake: get('diasFake'),
       detectorSelfbots: get('detectorSelfbots'),
-      antiMassBan:      get('antiMassBan'),
-      maxBans:          get('maxBans'),
-      antiMassKick:     get('antiMassKick'),
-      maxKicks:         get('maxKicks'),
-      whitelistIds:     get('whitelistIds'),
-      // Filtros
-      antiflood:        get('antiflood'),
-      limiteFlood:      get('limiteFlood'),
-      antilink:         get('antilink'),
-      antiinvite:       get('antiinvite'),
-      antipreconceito:  get('antipreconceito'),
-      autoModNomes:     get('autoModNomes'),
-      antiCapsLock:     get('antiCapsLock'),
-      anticaps:         get('antiCapsLock'), // compatibilidade
-      antiSpoiler:      get('antiSpoiler'),
-      limiteMencoes:    get('limiteMencoes'),
-      filtroEmojis:     get('filtroEmojis'),
-      maxEmojis:        get('maxEmojis'),
+      antiMassBan: get('antiMassBan'), maxBans: get('maxBans'),
+      antiMassKick: get('antiMassKick'), maxKicks: get('maxKicks'),
+      whitelistIds: get('whitelistIds'),
+      antiflood: get('antiflood'), limiteFlood: get('limiteFlood'),
+      antilink: get('antilink'), antiinvite: get('antiinvite'),
+      antipreconceito: get('antipreconceito'), autoModNomes: get('autoModNomes'),
+      antiCapsLock: get('antiCapsLock'), anticaps: get('antiCapsLock'),
+      antiSpoiler: get('antiSpoiler'), limiteMencoes: get('limiteMencoes'),
+      filtroEmojis: get('filtroEmojis'), maxEmojis: get('maxEmojis'),
       autoPunicaoWarns: get('autoPunicaoWarns'),
-      limpezaAgendada:  get('limpezaAgendada'),
-      horasLimpeza:     get('horasLimpeza'),
-      filtroLinks:      get('filtroLinks'),
-      customPunishMsg:  get('customPunishMsg'),
-      mutedRoleId:      get('mutedRoleId'),
-      // Canais
-      logs_seguranca:   get('logs_seguranca'),
-      logs_staff:       get('logs_staff'),
-      logs_msg:         get('logs_msg'),
-      logs_anticargos:  get('logs_anticargos'),
-      logs_join:        get('logs_join'),
-      msg_join:         get('msg_join'),
-      autorole:         get('autorole'),
-      logChannelId:     get('logChannelId'),
-      // IA
-      morgan_ativo:     get('morgan_ativo'),
-      morgan_canal:     get('morgan_canal')
+      limpezaAgendada: get('limpezaAgendada'), horasLimpeza: get('horasLimpeza'),
+      filtroLinks: get('filtroLinks'), customPunishMsg: get('customPunishMsg'),
+      mutedRoleId: get('mutedRoleId'),
+      logs_seguranca: get('logs_seguranca'), logs_staff: get('logs_staff'),
+      logs_msg: get('logs_msg'), logs_anticargos: get('logs_anticargos'),
+      logs_join: get('logs_join'), msg_join: get('msg_join'),
+      autorole: get('autorole'), logChannelId: get('logChannelId'),
+      morgan_ativo: get('morgan_ativo'), morgan_canal: get('morgan_canal')
     };
-
     document.getElementById('save-status').innerHTML = 'STATUS — <span>GRAVANDO...</span>';
-
     fetch('/api/config/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
     .then(r => r.json())
-    .then(res => {
-      showToast(res.message || 'Protocolos gravados com sucesso.');
-      document.getElementById('save-status').innerHTML = 'STATUS — <span>SALVO</span>';
-    })
-    .catch(() => {
-      showToast('Erro ao gravar. Verifique a conexão.', 'error');
-      document.getElementById('save-status').innerHTML = 'STATUS — <span style="color:var(--blood-bright)">FALHA</span>';
-    });
+    .then(res => { showToast(res.message || 'Protocolos gravados.'); document.getElementById('save-status').innerHTML = 'STATUS — <span>SALVO</span>'; })
+    .catch(() => { showToast('Erro ao gravar.', 'error'); document.getElementById('save-status').innerHTML = 'STATUS — <span style="color:var(--blood-bright)">FALHA</span>'; });
   }
 
   function abrirConfirmPanico() {
-    const guildId = document.getElementById('serverSelect').value;
-    if (!guildId) return showToast('Selecione um servidor antes de acionar o lockdown.', 'error');
+    if (!document.getElementById('serverSelect').value) return showToast('Selecione um servidor antes.', 'error');
     document.getElementById('panicOverlay').classList.add('active');
   }
-
-  function fecharOverlay() {
-    document.getElementById('panicOverlay').classList.remove('active');
-  }
-
+  function fecharOverlay() { document.getElementById('panicOverlay').classList.remove('active'); }
   function confirmarPanico() {
     fecharOverlay();
     const guildId = document.getElementById('serverSelect').value;
-    fetch('/api/config/panic', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guildId })
-    })
-    .then(r => r.json())
-    .then(res => showToast(res.message || 'Lockdown acionado.'))
-    .catch(() => showToast('Erro ao acionar protocolo de emergência.', 'error'));
+    fetch('/api/config/panic', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId }) })
+      .then(r => r.json()).then(res => showToast(res.message || 'Lockdown acionado.'))
+      .catch(() => showToast('Erro ao acionar protocolo.', 'error'));
   }
 </script>
 </body>
-</html>s
+</html>
