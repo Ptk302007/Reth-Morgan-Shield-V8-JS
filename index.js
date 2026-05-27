@@ -1,7 +1,7 @@
 // ============================================================
 //  RETH MORGAN — SHIELD SYSTEM V8
 //  index.js — Servidor + Bot + Painel Web Integrado
-//  ✅ Groq SDK + Fix prompt IA dono
+//  ✅ Groq SDK + Fix prompt IA dono + Fix canal Morgan JSON
 // ============================================================
 require('dotenv').config();
 const express    = require('express');
@@ -644,9 +644,38 @@ client.on('channelDelete', async (channel) => {
     } catch (e) {}
 });
 
+// ============================================================
+//  HELPERS DA IA
+// ============================================================
+
+// Extrai o primeiro bloco JSON que contenha "acao" do texto,
+// mesmo que a IA escreva prefixos como "LIMPAR CHAT: { ... }"
+function extrairJsonAcao(texto) {
+    const match = texto.match(/\{[\s\S]*?"acao"[\s\S]*?\}/);
+    if (!match) return null;
+    try {
+        return JSON.parse(match[0]);
+    } catch (e) {
+        // Tenta pegar um bloco maior caso o primeiro match tenha ficado incompleto
+        const matchGuloso = texto.match(/\{[\s\S]*"acao"[\s\S]*\}/);
+        if (!matchGuloso) return null;
+        try { return JSON.parse(matchGuloso[0]); } catch { return null; }
+    }
+}
+
+// Remove todo o bloco JSON + prefixo de texto da resposta
+// para não exibir o JSON cru no chat
+function removerBlocoJson(texto) {
+    // Remove prefixo tipo "LIMPAR CHAT: " e o JSON em sequência
+    return texto.replace(/[A-ZÇÃÕÁÉÍÓÚ\s]+:\s*\{[\s\S]*?"acao"[\s\S]*?\}/g, '').trim();
+}
+
 // ── EVENTO CENTRAL: MENSAGENS ──
 client.on('messageCreate', async (message) => {
-    if (!message.guild || message.author.bot || message.webhookId) return;
+    // ── GUARDIÕES: ignora bots, webhooks e o próprio bot ──
+    if (!message.guild) return;
+    if (message.author.bot) return;
+    if (message.webhookId) return;
     if (message.author.id === client.user?.id) return;
 
     let data = { canaisComandos: [] };
@@ -851,13 +880,13 @@ Personalidade: direta, rápida, sem enrolação, sem palavras difíceis.
 
 STATUS DO OPERADOR: ${isDono ? "DONO DO BOT — ACESSO TOTAL LIBERADO." : "USUÁRIO COMUM — SEM ACESSO A AÇÕES."}
 
-${isDono ? `VOCÊ DEVE EXECUTAR AS ORDENS DO DONO. Para ações específicas, responda SOMENTE com o formato abaixo, sem texto extra, sem markdown, sem crases:
+${isDono ? `VOCÊ DEVE EXECUTAR AS ORDENS DO DONO. Para ações específicas, responda SOMENTE com o formato abaixo, sem texto extra, sem markdown, sem crases, sem prefixo nenhum (não escreva "LIMPAR CHAT:", "BAN:" ou qualquer texto antes do JSON):
 
-BAN: { "acao": "ban", "motivo": "motivo deduzido", "resposta_chat": "Feito." }
-LIMPAR CHAT: { "acao": "clear", "quantidade": 100, "resposta_chat": "Feito." }
-ADICIONAR CARGO: { "acao": "addRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
-REMOVER CARGO: { "acao": "removeRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
-REMOVER TODOS OS CARGOS: { "acao": "removeAllRoles", "resposta_chat": "Feito." }
+{ "acao": "ban", "motivo": "motivo deduzido", "resposta_chat": "Feito." }
+{ "acao": "clear", "quantidade": 100, "resposta_chat": "Feito." }
+{ "acao": "addRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
+{ "acao": "removeRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
+{ "acao": "removeAllRoles", "resposta_chat": "Feito." }
 CRIAR COMANDO:
 [CRIAR_COMANDO]
 <nome_arquivo>nome.js</nome_arquivo>
@@ -874,6 +903,7 @@ REGRAS DE AÇÃO:
 - Frases como "tira o cargo X" → removeRole.
 - Use JSON/[CRIAR_COMANDO] SOMENTE quando o dono pedir explicitamente uma ação.
 - Para perguntas normais, mesmo do dono, responda em texto simples e direto.
+- NUNCA escreva prefixos antes do JSON como "BAN:", "LIMPAR CHAT:", "AÇÃO:" etc. Comece direto com { 
 
 ══════════════════════════════════════════
 REGRAS OBRIGATÓRIAS PARA CRIAÇÃO DE COMANDOS (Discord.js v14):
@@ -943,119 +973,16 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
         const respostaIA = await perguntarParaIA(perguntaLimpa, diretrizesIA, message.channel.id);
         let textoResposta = respostaIA.trim();
 
-        // ── LIMPEZA DE MARKDOWN ──
-        const crasesMarkdown = '\`\`\`';
+        // ── LIMPEZA DE MARKDOWN (crases triplas) ──
+        const crasesMarkdown = '```';
         if (textoResposta.startsWith(crasesMarkdown)) {
             textoResposta = textoResposta.slice(3).trim();
             if (textoResposta.toLowerCase().startsWith('json')) textoResposta = textoResposta.slice(4).trim();
             if (textoResposta.endsWith(crasesMarkdown)) textoResposta = textoResposta.slice(0, -3).trim();
         }
 
-        // ── EXECUÇÃO DE ORDENS JSON ──
-        if (textoResposta.startsWith('{') && textoResposta.includes('"acao"')) {
-            try {
-                const ordem = JSON.parse(textoResposta);
-
-                if (ordem.acao === 'ban' && isDono) {
-                    const membroAlvo = message.mentions.members.first();
-                    if (!membroAlvo) return message.reply("⚠️ Marque quem quer banir.");
-                    if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso banir um dos donos.");
-                    await membroAlvo.ban({ reason: `Morgan: ${ordem.motivo || 'Ordem do dono'}` });
-                    registrarInfracao(message.guild.id, membroAlvo.id, 'bans', `Morgan: ${ordem.motivo || 'Ordem do dono'}`);
-                    return message.reply(`🔨 ${ordem.resposta_chat}`);
-                }
-
-                if (ordem.acao === 'clear' && isDono) {
-                    let qtd = parseInt(ordem.quantidade) || 100;
-                    if (qtd < 1) qtd = 1;
-                    if (qtd > 100) qtd = 100;
-                    await message.delete().catch(() => {});
-                    const deletadas = await message.channel.bulkDelete(qtd, true).catch(() => null);
-                    if (!deletadas) return message.channel.send("⚠️ Mensagens com mais de 14 dias não podem ser limpas em massa.");
-                    const conf = await message.channel.send(`🧹 ${ordem.resposta_chat} (\`${deletadas.size}\` mensagens)`);
-                    setTimeout(() => conf.delete().catch(() => {}), 5000);
-                    limparHistoricoCanal(message.channel.id);
-                    return;
-                }
-
-                if (ordem.acao === 'addRole' && isDono) {
-                    const membroAlvo = message.mentions.members.first();
-                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
-                    let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
-                        || message.guild.roles.cache.find(r => r.name.toLowerCase() === (ordem.cargo || '').toLowerCase());
-                    if (!cargoAlvo && ordem.cargo) {
-                        const matchId = ordem.cargo.match(/\d{17,20}/);
-                        if (matchId) cargoAlvo = message.guild.roles.cache.get(matchId[0]);
-                    }
-                    if (!cargoAlvo && message.mentions.roles.size > 0) cargoAlvo = message.mentions.roles.first();
-                    if (!cargoAlvo) return message.reply("⚠️ Cargo não encontrado.");
-                    try {
-                        await membroAlvo.roles.add(cargoAlvo, 'Morgan: Ordem do dono');
-                        const logEmbed = new EmbedBuilder()
-                            .setColor('#2ecc71').setTitle('🔰 CARGO ADICIONADO PELA IA')
-                            .addFields(
-                                { name: '👤 Usuário', value: `<@${membroAlvo.id}>`, inline: true },
-                                { name: '🎭 Cargo',   value: `<@&${cargoAlvo.id}>`, inline: true }
-                            ).setTimestamp();
-                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
-                        return message.reply(`🔰 ${ordem.resposta_chat}`);
-                    } catch (e) {
-                        return message.reply("❌ Sem permissão ou cargo acima do bot na hierarquia.");
-                    }
-                }
-
-                if (ordem.acao === 'removeRole' && isDono) {
-                    const membroAlvo = message.mentions.members.first();
-                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
-                    let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
-                        || message.guild.roles.cache.find(r => r.name.toLowerCase() === (ordem.cargo || '').toLowerCase());
-                    if (!cargoAlvo && ordem.cargo) {
-                        const matchId = ordem.cargo.match(/\d{17,20}/);
-                        if (matchId) cargoAlvo = message.guild.roles.cache.get(matchId[0]);
-                    }
-                    if (!cargoAlvo && message.mentions.roles.size > 0) cargoAlvo = message.mentions.roles.first();
-                    if (!cargoAlvo) return message.reply("⚠️ Cargo não encontrado.");
-                    try {
-                        await membroAlvo.roles.remove(cargoAlvo, 'Morgan: Ordem do dono');
-                        const logEmbed = new EmbedBuilder()
-                            .setColor('#e74c3c').setTitle('🔰 CARGO REMOVIDO PELA IA')
-                            .addFields(
-                                { name: '👤 Usuário', value: `<@${membroAlvo.id}>`, inline: true },
-                                { name: '🎭 Cargo',   value: `<@&${cargoAlvo.id}>`, inline: true }
-                            ).setTimestamp();
-                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
-                        return message.reply(`🔰 ${ordem.resposta_chat}`);
-                    } catch (e) {
-                        return message.reply("❌ Sem permissão ou cargo acima do bot na hierarquia.");
-                    }
-                }
-
-                if (ordem.acao === 'removeAllRoles' && isDono) {
-                    const membroAlvo = message.mentions.members.first();
-                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
-                    if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso remover cargos de um dos donos.");
-                    try {
-                        const cargosRemoviveis = membroAlvo.roles.cache.filter(r => r.id !== message.guild.id && !r.managed);
-                        if (cargosRemoviveis.size === 0) return message.reply("⚠️ Esse usuário não tem cargos removíveis.");
-                        await membroAlvo.roles.remove(cargosRemoviveis, 'Morgan: Ordem do dono');
-                        const logEmbed = new EmbedBuilder()
-                            .setColor('#e74c3c').setTitle('🔰 TODOS OS CARGOS REMOVIDOS PELA IA')
-                            .addFields(
-                                { name: '👤 Usuário',          value: `<@${membroAlvo.id}>`, inline: true },
-                                { name: '🎭 Cargos removidos', value: `\`${cargosRemoviveis.size}\``, inline: true }
-                            ).setTimestamp();
-                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
-                        return message.reply(`🔰 ${ordem.resposta_chat}`);
-                    } catch (e) {
-                        return message.reply("❌ Sem permissão ou hierarquia insuficiente.");
-                    }
-                }
-
-            } catch (e) { console.error("Erro ao decodificar ordem JSON:", e); }
-        }
-
-        // ── CRIAR COMANDO ──
-        // ✅ FIX: aceita com ou sem colchetes [ ] no marcador
+        // ── CRIAR COMANDO ── (prioridade: verificar antes do JSON)
+        // Aceita com ou sem colchetes [ ] no marcador
         if ((textoResposta.includes('[CRIAR_COMANDO]') || textoResposta.includes('CRIAR_COMANDO')) && isDono) {
             try {
                 const extrairTag = (tag, texto) => {
@@ -1080,7 +1007,7 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
                     novoComando.category = categoria;
                     client.commands.set(novoComando.name, novoComando);
 
-                    // ── ENVIA CÓDIGO NO PRIVADO DO DONO PARA CONFERÊNCIA ──
+                    // Envia código no privado do dono para conferência
                     try {
                         const chunks = [];
                         let cod = codigoJs;
@@ -1106,7 +1033,128 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
             }
         }
 
-        return message.reply(textoResposta);
+        // ── EXECUÇÃO DE ORDENS JSON ──
+        // Usa regex para encontrar o JSON em qualquer parte da resposta,
+        // mesmo que a IA coloque prefixo como "LIMPAR CHAT: { ... }"
+        if (isDono) {
+            const ordem = extrairJsonAcao(textoResposta);
+
+            if (ordem && ordem.acao) {
+                // ── BAN ──
+                if (ordem.acao === 'ban') {
+                    const membroAlvo = message.mentions.members.first();
+                    if (!membroAlvo) return message.reply("⚠️ Marque quem quer banir.");
+                    if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso banir um dos donos.");
+                    await membroAlvo.ban({ reason: `Morgan: ${ordem.motivo || 'Ordem do dono'}` });
+                    registrarInfracao(message.guild.id, membroAlvo.id, 'bans', `Morgan: ${ordem.motivo || 'Ordem do dono'}`);
+                    return message.reply(`🔨 ${ordem.resposta_chat}`);
+                }
+
+                // ── CLEAR ──
+                if (ordem.acao === 'clear') {
+                    let qtd = parseInt(ordem.quantidade) || 100;
+                    if (qtd < 1)   qtd = 1;
+                    if (qtd > 100) qtd = 100;
+                    await message.delete().catch(() => {});
+                    const deletadas = await message.channel.bulkDelete(qtd, true).catch(() => null);
+                    if (!deletadas) return message.channel.send("⚠️ Mensagens com mais de 14 dias não podem ser limpas em massa.");
+                    const conf = await message.channel.send(`🧹 ${ordem.resposta_chat} (\`${deletadas.size}\` mensagens)`);
+                    setTimeout(() => conf.delete().catch(() => {}), 5000);
+                    limparHistoricoCanal(message.channel.id);
+                    return;
+                }
+
+                // ── ADD ROLE ──
+                if (ordem.acao === 'addRole') {
+                    const membroAlvo = message.mentions.members.first();
+                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
+                    let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
+                        || message.guild.roles.cache.find(r => r.name.toLowerCase() === (ordem.cargo || '').toLowerCase());
+                    if (!cargoAlvo && ordem.cargo) {
+                        const matchId = ordem.cargo.match(/\d{17,20}/);
+                        if (matchId) cargoAlvo = message.guild.roles.cache.get(matchId[0]);
+                    }
+                    if (!cargoAlvo && message.mentions.roles.size > 0) cargoAlvo = message.mentions.roles.first();
+                    if (!cargoAlvo) return message.reply("⚠️ Cargo não encontrado.");
+                    try {
+                        await membroAlvo.roles.add(cargoAlvo, 'Morgan: Ordem do dono');
+                        const logEmbed = new EmbedBuilder()
+                            .setColor('#2ecc71').setTitle('🔰 CARGO ADICIONADO PELA IA')
+                            .addFields(
+                                { name: '👤 Usuário', value: `<@${membroAlvo.id}>`, inline: true },
+                                { name: '🎭 Cargo',   value: `<@&${cargoAlvo.id}>`, inline: true }
+                            ).setTimestamp();
+                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
+                        return message.reply(`🔰 ${ordem.resposta_chat}`);
+                    } catch (e) {
+                        return message.reply("❌ Sem permissão ou cargo acima do bot na hierarquia.");
+                    }
+                }
+
+                // ── REMOVE ROLE ──
+                if (ordem.acao === 'removeRole') {
+                    const membroAlvo = message.mentions.members.first();
+                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
+                    let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
+                        || message.guild.roles.cache.find(r => r.name.toLowerCase() === (ordem.cargo || '').toLowerCase());
+                    if (!cargoAlvo && ordem.cargo) {
+                        const matchId = ordem.cargo.match(/\d{17,20}/);
+                        if (matchId) cargoAlvo = message.guild.roles.cache.get(matchId[0]);
+                    }
+                    if (!cargoAlvo && message.mentions.roles.size > 0) cargoAlvo = message.mentions.roles.first();
+                    if (!cargoAlvo) return message.reply("⚠️ Cargo não encontrado.");
+                    try {
+                        await membroAlvo.roles.remove(cargoAlvo, 'Morgan: Ordem do dono');
+                        const logEmbed = new EmbedBuilder()
+                            .setColor('#e74c3c').setTitle('🔰 CARGO REMOVIDO PELA IA')
+                            .addFields(
+                                { name: '👤 Usuário', value: `<@${membroAlvo.id}>`, inline: true },
+                                { name: '🎭 Cargo',   value: `<@&${cargoAlvo.id}>`, inline: true }
+                            ).setTimestamp();
+                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
+                        return message.reply(`🔰 ${ordem.resposta_chat}`);
+                    } catch (e) {
+                        return message.reply("❌ Sem permissão ou cargo acima do bot na hierarquia.");
+                    }
+                }
+
+                // ── REMOVE ALL ROLES ──
+                if (ordem.acao === 'removeAllRoles') {
+                    const membroAlvo = message.mentions.members.first();
+                    if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
+                    if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso remover cargos de um dos donos.");
+                    try {
+                        const cargosRemoviveis = membroAlvo.roles.cache.filter(r => r.id !== message.guild.id && !r.managed);
+                        if (cargosRemoviveis.size === 0) return message.reply("⚠️ Esse usuário não tem cargos removíveis.");
+                        await membroAlvo.roles.remove(cargosRemoviveis, 'Morgan: Ordem do dono');
+                        const logEmbed = new EmbedBuilder()
+                            .setColor('#e74c3c').setTitle('🔰 TODOS OS CARGOS REMOVIDOS PELA IA')
+                            .addFields(
+                                { name: '👤 Usuário',          value: `<@${membroAlvo.id}>`, inline: true },
+                                { name: '🎭 Cargos removidos', value: `\`${cargosRemoviveis.size}\``, inline: true }
+                            ).setTimestamp();
+                        enviarLog(message.guild, 'logs_seguranca', logEmbed);
+                        return message.reply(`🔰 ${ordem.resposta_chat}`);
+                    } catch (e) {
+                        return message.reply("❌ Sem permissão ou hierarquia insuficiente.");
+                    }
+                }
+
+                // ação reconhecida mas sem handler → não exibe JSON, ignora silenciosamente
+                console.warn('[IA] Ação desconhecida recebida:', ordem.acao);
+                return;
+            }
+        }
+
+        // ── RESPOSTA NORMAL ──
+        // Remove qualquer resquício de JSON que a IA possa ter colocado junto com texto
+        const respostaFinal = removerBlocoJson(textoResposta);
+
+        // Se depois de limpar ficou vazio, não responde nada (evita reply em branco)
+        if (!respostaFinal) return;
+
+        return message.reply(respostaFinal);
+
     } catch (err) {
         console.error("Erro no processamento da IA:", err);
     }
