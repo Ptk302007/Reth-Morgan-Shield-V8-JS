@@ -230,7 +230,7 @@ const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
 const PREFIX = 'r!';
 
-const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
+const OWNER_IDS = ['1507543140800921610'];
 const OWNER_ID  = OWNER_IDS[0];
 
 function ehDono(userId) {
@@ -256,17 +256,23 @@ const massBanMap       = new Map();
 const massKickMap      = new Map();
 const selfbotMap       = new Map();
 
+// ── LOADER DE COMANDOS ──
 const commandsPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(commandsPath);
 for (const folder of commandFolders) {
     const folderPath = path.join(commandsPath, folder);
+    if (!fs.statSync(folderPath).isDirectory()) continue;
     const commandFiles = fs.readdirSync(folderPath).filter(f => f.endsWith('.js'));
     for (const file of commandFiles) {
         const filePath = path.join(folderPath, file);
-        const command  = require(filePath);
-        if ('name' in command && 'execute' in command) {
-            command.category = folder.toLowerCase();
-            client.commands.set(command.name, command);
+        try {
+            const command  = require(filePath);
+            if ('name' in command && 'execute' in command) {
+                command.category = folder.toLowerCase();
+                client.commands.set(command.name, command);
+            }
+        } catch (e) {
+            console.error(`[Loader] Erro ao carregar ${file}:`, e.message);
         }
     }
 }
@@ -390,7 +396,7 @@ client.once('ready', () => {
         { name: 'Protocolo Anti-Nuke Ativo ☢️', type: 2 },
         { name: 'Desenvolvido por nossos donos 👑', type: 0 },
         { name: 'RETH MORGAN: Executando o caos. Codificando a ordem.', type: 2 },
-        { name: 'Use d!setup pra me adicionar na sua ordem! 🚀', type: 0 }
+        { name: 'Use r!setup pra me adicionar na sua ordem! 🚀', type: 0 }
     ];
     let idx = 0;
     setInterval(() => {
@@ -840,7 +846,6 @@ client.on('messageCreate', async (message) => {
 
         await message.channel.sendTyping();
 
-        // ── PROMPT CORRIGIDO ──
         const diretrizesIA = `Você é a Reth Morgan, assistente de segurança e desenvolvimento do Discord.
 Personalidade: direta, rápida, sem enrolação, sem palavras difíceis.
 
@@ -873,7 +878,7 @@ REGRAS DE AÇÃO:
         const respostaIA = await perguntarParaIA(perguntaLimpa, diretrizesIA, message.channel.id);
         let textoResposta = respostaIA.trim();
 
-        // Limpeza de markdown
+        // ── LIMPEZA DE MARKDOWN ──
         const crasesMarkdown = '\`\`\`';
         if (textoResposta.startsWith(crasesMarkdown)) {
             textoResposta = textoResposta.slice(3).trim();
@@ -985,7 +990,8 @@ REGRAS DE AÇÃO:
         }
 
         // ── CRIAR COMANDO ──
-        if (textoResposta.includes('[CRIAR_COMANDO]') && isDono) {
+        // ✅ FIX: aceita com ou sem colchetes [ ] no marcador
+        if ((textoResposta.includes('[CRIAR_COMANDO]') || textoResposta.includes('CRIAR_COMANDO')) && isDono) {
             try {
                 const extrairTag = (tag, texto) => {
                     const ini = texto.indexOf('<' + tag + '>');
@@ -997,6 +1003,7 @@ REGRAS DE AÇÃO:
                 const categoria    = (extrairTag('categoria_pasta', textoResposta) || 'utilitarios').toLowerCase();
                 const respostaChat = extrairTag('resposta_chat', textoResposta) || 'Pronto.';
                 const codigoJs     = extrairTag('codigo_js', textoResposta);
+
                 if (nomeArquivo && codigoJs) {
                     const nomeFinal      = nomeArquivo.endsWith('.js') ? nomeArquivo : `${nomeArquivo}.js`;
                     const pastaDestino   = path.join(__dirname, 'commands', categoria);
@@ -1008,6 +1015,8 @@ REGRAS DE AÇÃO:
                     novoComando.category = categoria;
                     client.commands.set(novoComando.name, novoComando);
                     return message.reply(`⚙️ **[Compilador]** ${respostaChat}\n\`commands/${categoria}/${nomeFinal}\``);
+                } else {
+                    return message.reply("❌ Compilador: estrutura de tags incompleta. Verifique `<nome_arquivo>` e `<codigo_js>`.");
                 }
             } catch (e) {
                 console.error("Erro no compilador:", e);
