@@ -288,7 +288,6 @@
   .msg.user .msg-bubble { background: rgba(139,0,0,0.08); border-color: rgba(139,0,0,0.2); }
   .msg.bot  .msg-bubble { background: var(--surface); border-color: #1a1e1a; border-left: 2px solid var(--blood); }
 
-  /* imagem dentro da bolha */
   .msg-bubble img.msg-img {
     display: block;
     max-width: 100%;
@@ -320,7 +319,6 @@
     backdrop-filter: blur(8px);
   }
 
-  /* preview da imagem selecionada */
   .img-preview-wrap {
     display: none;
     align-items: center;
@@ -363,7 +361,6 @@
   }
   .input-wrap:focus-within { border-color: var(--blood); }
 
-  /* botão de imagem */
   .btn-img {
     background: transparent; border: none;
     color: var(--text-dim); cursor: pointer;
@@ -416,6 +413,14 @@
     color: var(--text-dim);
   }
 
+  /* badge dono */
+  .owner-badge {
+    font-family: var(--font-mono); font-size: 8px;
+    color: var(--blood-bright); border: 1px solid var(--blood-dim);
+    background: rgba(139,0,0,0.12); padding: 2px 7px;
+    letter-spacing: 2px; margin-left: 4px;
+  }
+
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #1a1e1a; }
@@ -446,6 +451,7 @@
       <span id="user-avatar-fallback" class="topbar-avatar-fallback">?</span>
     </div>
     <span id="username" class="topbar-username">...</span>
+    <span id="owner-badge" class="owner-badge" style="display:none;">DONO</span>
   </div>
 </header>
 
@@ -488,7 +494,6 @@
     </div>
 
     <div class="input-area">
-      <!-- preview da imagem -->
       <div class="img-preview-wrap" id="img-preview-wrap">
         <img class="img-preview-thumb" id="img-preview-thumb" src="" alt="">
         <span class="img-preview-name" id="img-preview-name"></span>
@@ -496,7 +501,6 @@
       </div>
 
       <div class="input-wrap">
-        <!-- botão de imagem -->
         <button class="btn-img" onclick="document.getElementById('img-input').click()" title="Anexar imagem">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -524,6 +528,9 @@
 <script>
   /* DATA_INJECTION */
 
+  // ── OWNER IDS — lidos do servidor via dashboardData ──
+  const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
+
   let historico    = [];
   let sessoes      = [];
   let sessaoAtual  = null;
@@ -532,9 +539,9 @@
   let imagemMime   = null;
   let imagemNome   = null;
 
-  const OWNER_ID = '1507543140800921610';
   let usuarioId   = '';
   let usuarioNome = '';
+  let ehDono      = false;
 
   if (!window.dashboardData) {
     window.location.href = '/';
@@ -542,7 +549,10 @@
     const { username, avatar, id } = window.dashboardData;
     usuarioNome = username;
     usuarioId   = id || '';
+    ehDono      = OWNER_IDS.includes(usuarioId);
+
     document.getElementById('username').innerText = username;
+    if (ehDono) document.getElementById('owner-badge').style.display = 'inline';
     inicializarAvatar(username, avatar);
     carregarSessoes();
     novaConversa(true);
@@ -610,7 +620,7 @@
       const realIdx = sessoes.length - 1 - i;
       const div = document.createElement('div');
       div.className = 'history-item' + (sessaoAtual === realIdx ? ' active' : '');
-      div.innerHTML = `<span class="history-dot"></span>${s.titulo}`;
+      div.innerHTML = `<span class="history-dot"></span>${escaparHTML(s.titulo)}`;
       div.title = s.titulo;
       div.onclick = () => carregarSessao(realIdx);
       list.appendChild(div);
@@ -672,9 +682,8 @@
     input.value = '';
     input.style.height = 'auto';
 
-    // guarda referência local da imagem antes de limpar
-    const imgB64   = imagemBase64;
-    const imgMime  = imagemMime;
+    const imgB64     = imagemBase64;
+    const imgMime    = imagemMime;
     const imgDataUrl = temImg ? `data:${imagemMime};base64,${imagemBase64}` : null;
 
     adicionarMensagemDOM('user', texto, imgDataUrl);
@@ -688,13 +697,11 @@
     const typingId = adicionarTyping();
 
     try {
-      const ehDono = usuarioId === OWNER_ID;
-
       const sistema = `Você é a Reth Morgan, IA do sistema Shield V8, criada por PT.
 Personalidade: direta, sem enrolação, respostas curtas e objetivas.
 Você conhece todos os sistemas do bot: anti-nuke, anti-bot, anti-fake, anti-flood, anti-link, anti-invite, anti-caps, anti-preconceito, log system, autorole, comandos de moderação (r!warn, r!mute, r!ban, r!kick, r!clear, r!painel, r!config, r!antinuke, r!antiflood, r!autorole, r!userinfo, r!help).
-${ehDono ? 'Quem está falando é o PT, seu criador. Trate-o como dono.' : 'Usuário comum logado via Discord.'}
-${temImg ? 'O usuário enviou uma imagem junto com a mensagem. Analise-a.' : ''}
+${ehDono ? 'Quem está falando é o PT, seu criador. Trate-o como dono com acesso total.' : 'Usuário comum logado via Discord OAuth2.'}
+${temImg ? 'O usuário enviou uma imagem junto com a mensagem. Analise-a com atenção.' : ''}
 Responda sempre em português brasileiro.`;
 
       const body = { mensagem: texto || 'Descreva esta imagem.', historico, sistema };
@@ -754,20 +761,17 @@ Responda sempre em português brasileiro.`;
     const nome   = isUser ? usuarioNome : 'MORGAN';
 
     const avatarHTML = isUser
-      ? `<div class="msg-avatar"><span class="msg-avatar-letter">${(usuarioNome||'U')[0].toUpperCase()}</span></div>`
+      ? `<div class="msg-avatar"><span class="msg-avatar-letter">${escaparHTML((usuarioNome||'U')[0].toUpperCase())}</span></div>`
       : `<div class="msg-avatar bot-av"><span>RM</span></div>`;
 
-    const imgHTML = imgDataUrl
-      ? `<img class="msg-img" src="${imgDataUrl}" alt="imagem enviada">`
-      : '';
-
+    const imgHTML  = imgDataUrl ? `<img class="msg-img" src="${imgDataUrl}" alt="imagem enviada">` : '';
     const textoHTML = texto ? escaparHTML(texto) : '';
 
     div.innerHTML = `
       ${avatarHTML}
       <div class="msg-body">
         <div class="msg-meta">
-          <span class="msg-meta-name ${isUser ? '' : 'bot'}">${nome}</span>
+          <span class="msg-meta-name ${isUser ? '' : 'bot'}">${escaparHTML(nome)}</span>
           <span class="msg-meta-time">${agora()}</span>
         </div>
         <div class="msg-bubble">${imgHTML}${textoHTML}</div>
@@ -796,13 +800,15 @@ Responda sempre em português brasileiro.`;
   }
 
   function removerTyping(id) { document.getElementById(id)?.remove(); }
+
   function scrollBottom() {
     const msgs = document.getElementById('messages');
     msgs.scrollTop = msgs.scrollHeight;
   }
 
   function escaparHTML(str) {
-    return str
+    if (!str) return '';
+    return String(str)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
