@@ -230,7 +230,7 @@ const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
 const PREFIX = 'r!';
 
-const OWNER_IDS = ['1507543140800921610'];
+const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
 const OWNER_ID  = OWNER_IDS[0];
 
 function ehDono(userId) {
@@ -873,7 +873,72 @@ REGRAS DE AÇÃO:
 - Frases como "dá o cargo X", "adiciona X" → addRole.
 - Frases como "tira o cargo X" → removeRole.
 - Use JSON/[CRIAR_COMANDO] SOMENTE quando o dono pedir explicitamente uma ação.
-- Para perguntas normais, mesmo do dono, responda em texto simples e direto.` : `- Responda curto e direto. Não execute nenhuma ação.`}`;
+- Para perguntas normais, mesmo do dono, responda em texto simples e direto.
+
+══════════════════════════════════════════
+REGRAS OBRIGATÓRIAS PARA CRIAÇÃO DE COMANDOS (Discord.js v14):
+══════════════════════════════════════════
+
+IMPORTS: NUNCA use "new Discord.MessageEmbed()" nem "require('discord.js')" dentro do comando.
+Use SEMPRE: const { EmbedBuilder, PermissionsBitField } = require('discord.js');
+
+EMBEDS: NUNCA use .setDescription().addField(). Use SEMPRE EmbedBuilder com .addFields([]):
+  const embed = new EmbedBuilder()
+    .setColor('#hex')
+    .setTitle('Título')
+    .setDescription('Descrição')
+    .addFields({ name: 'Campo', value: 'Valor', inline: true })
+    .setTimestamp();
+  message.channel.send({ embeds: [embed] });
+
+PERMISSÕES: NUNCA use hasPermission() nem 'ADMINISTRATOR' como string.
+Use SEMPRE: message.member.permissions.has(PermissionsBitField.Flags.BanMembers)
+Flags comuns: BanMembers, KickMembers, ManageMessages, ManageRoles, Administrator
+
+BANS: NUNCA use guild.fetchBans(). Use SEMPRE: guild.bans.fetch()
+
+REAÇÕES: NUNCA use createReactionCollector(filter, { time }) — isso é v12.
+Use SEMPRE: msg.createReactionCollector({ filter, time: 15000 })
+
+COLETOR DE MENSAGENS: NUNCA use channel.createMessageCollector(filter, { time }).
+Use SEMPRE: channel.createMessageCollector({ filter, time: 15000, max: 1 })
+
+TIMEOUT/MUTE: NUNCA use member.timeout(ms). Use SEMPRE member.timeout(ms, 'motivo') com ms em milissegundos.
+
+MENSAGENS: NUNCA use message.channel.send("texto puro") para enviar apenas texto simples junto com embeds.
+Use SEMPRE: message.channel.send({ content: 'texto' }) ou message.channel.send({ embeds: [embed] })
+
+RATE LIMIT: Em loops de ban/unban/kick em massa, SEMPRE adicione delay:
+  await new Promise(r => setTimeout(r, 300));
+
+EXECUTE: SEMPRE use async: execute: async (message, args, client) => { }
+
+VERIFICAÇÃO DE PERMISSÃO DO BOT: Sempre verifique se o bot tem permissão antes de executar ações:
+  if (!message.guild.members.me.permissions.has(PermissionsBitField.Flags.BanMembers))
+    return message.reply('❌ Não tenho permissão para isso.');
+
+ESTRUTURA MÍNIMA CORRETA:
+const { EmbedBuilder, PermissionsBitField } = require('discord.js');
+module.exports = {
+  name: 'nomecomando',
+  execute: async (message, args, client) => {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages))
+      return message.reply('❌ Sem permissão.');
+    // lógica aqui
+  }
+};
+
+SEGURANÇA OBRIGATÓRIA EM COMANDOS:
+- SEMPRE valide args antes de usar: if (!args[0]) return message.reply('❌ Uso: r!comando <argumento>');
+- Em comandos destrutivos (ban, kick, timeout, deletar, remover cargos em massa), OBRIGATORIAMENTE peça confirmação por texto antes de executar:
+  message.channel.send('Digite **confirmar** em 15 segundos para prosseguir.');
+  const filter = m => m.author.id === message.author.id && m.content.toLowerCase() === 'confirmar';
+  const collector = message.channel.createMessageCollector({ filter, time: 15000, max: 1 });
+- NUNCA afete bots, donos (IDs: ${OWNER_IDS.join(', ')}) ou membros com cargo acima do bot na hierarquia.
+- NUNCA use forEach com await — use sempre for...of com await para loops assíncronos.
+- Em loops de ações em massa, SEMPRE use delay: await new Promise(r => setTimeout(r, 300));
+- SEMPRE capture erros e responda com message.reply('❌ Erro: ' + e.message) — nunca deixe erros silenciosos.
+- Todo comando usado sem argumentos obrigatórios DEVE mostrar exemplo de uso.` : `- Responda curto e direto. Não execute nenhuma ação.`}`;
 
         const respostaIA = await perguntarParaIA(perguntaLimpa, diretrizesIA, message.channel.id);
         let textoResposta = respostaIA.trim();
@@ -1014,7 +1079,24 @@ REGRAS DE AÇÃO:
                     const novoComando = require(caminhoArquivo);
                     novoComando.category = categoria;
                     client.commands.set(novoComando.name, novoComando);
-                    return message.reply(`⚙️ **[Compilador]** ${respostaChat}\n\`commands/${categoria}/${nomeFinal}\``);
+
+                    // ── ENVIA CÓDIGO NO PRIVADO DO DONO PARA CONFERÊNCIA ──
+                    try {
+                        const chunks = [];
+                        let cod = codigoJs;
+                        while (cod.length > 0) {
+                            chunks.push(cod.slice(0, 1800));
+                            cod = cod.slice(1800);
+                        }
+                        await message.author.send(`📦 **Comando compilado:** \`commands/${categoria}/${nomeFinal}\`\nConferência do código:`);
+                        for (const chunk of chunks) {
+                            await message.author.send(`\`\`\`js\n${chunk}\n\`\`\``);
+                        }
+                    } catch (e) {
+                        console.error('[Compilador] Não consegui enviar DM ao dono:', e.message);
+                    }
+
+                    return message.reply(`📩 **[Compilador]** ${respostaChat}\n\`commands/${categoria}/${nomeFinal}\`\nCódigo enviado no seu privado para conferência! ✅`);
                 } else {
                     return message.reply("❌ Compilador: estrutura de tags incompleta. Verifique `<nome_arquivo>` e `<codigo_js>`.");
                 }
