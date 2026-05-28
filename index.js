@@ -1,7 +1,7 @@
 // ============================================================
 //  RETH MORGAN — SHIELD SYSTEM V8
 //  index.js — Servidor + Bot + Painel Web Integrado
-//  ✅ Groq SDK + Fix prompt IA dono + Fix canal Morgan JSON
+//  ✅ Groq SDK + Fix prompt IA dono
 // ============================================================
 require('dotenv').config();
 const express    = require('express');
@@ -230,7 +230,7 @@ const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
 const PREFIX = 'r!';
 
-const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
+const OWNER_IDS = ['1507543140800921610']
 const OWNER_ID  = OWNER_IDS[0];
 
 function ehDono(userId) {
@@ -448,6 +448,89 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     } catch (e) { console.error('[anti-cargos]', e.message); }
 });
 
+// ── ANTI-REMOÇÃO DE CASTIGO ──────────────────────────────────
+// Cola esse bloco no index.js logo após o listener do anti-cargos
+// (após o client.on('guildMemberUpdate', ...) do anti-cargos)
+//
+// Lógica:
+//   - Se o timeout foi removido E ainda havia tempo restante no JSON
+//   - E o muteAtivo ainda existe (não foi apagado pelo r!descastigar)
+//   - Então foi remoção não autorizada → reaplica o tempo restante
+// ──────────────────────────────────────────────────────────────
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    try {
+        // Só dispara quando o timeout FOI removido (tinha antes, não tem mais)
+        const tihaTimeout = !!oldMember.communicationDisabledUntil && oldMember.communicationDisabledUntil > new Date();
+        const temAgora    = !!newMember.communicationDisabledUntil && newMember.communicationDisabledUntil > new Date();
+        if (!tihaTimeout || temAgora) return;
+
+        // Lê o JSON para ver se ainda existe muteAtivo (remoção não autorizada)
+        let dados = {};
+        try { dados = JSON.parse(require('fs').readFileSync('./database/punicoes.json', 'utf-8')); } catch { return; }
+
+        const muteAtivo = dados[newMember.guild.id]?.[newMember.id]?.muteAtivo;
+        if (!muteAtivo) return; // r!descastigar já limpou — remoção era autorizada
+
+        // Calcula tempo restante
+        const tempoRestante = muteAtivo.expiresAt - Date.now();
+        if (tempoRestante <= 0) return; // já expirou naturalmente
+
+        // Reaplica o timeout com o tempo restante
+        await newMember.timeout(tempoRestante, 'Reth Morgan: Remoção não autorizada de castigo — reaplicado').catch(() => {});
+
+        // Tenta identificar quem removeu pelo audit log
+        let removedor = null;
+        try {
+            const { AuditLogEvent } = require('discord.js');
+            const logs  = await newMember.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberUpdate });
+            const entry = logs.entries.first();
+            if (entry && Date.now() - entry.createdTimestamp < 5000) removedor = entry.executor;
+        } catch {}
+
+        // Log da tentativa bloqueada
+        const { EmbedBuilder } = require('discord.js');
+        const logEmbed = new EmbedBuilder()
+            .setColor('#8B0000')
+            .setAuthor({ name: 'ANTI-REMOÇÃO DE CASTIGO', iconURL: newMember.guild.members.me.displayAvatarURL() })
+            .setThumbnail(newMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setTitle('🔒 CASTIGO REAPLICADO — REMOÇÃO BLOQUEADA')
+            .setDescription('Uma tentativa de remoção não autorizada de castigo foi interceptada.')
+            .addFields(
+                { name: '👤 PUNIDO',        value: `<@${newMember.id}> · \`${newMember.id}\``, inline: true },
+                { name: '🕵️ REMOVEDOR',     value: removedor ? `<@${removedor.id}>` : '`Não identificado`', inline: true },
+                { name: '🔫 APLICADO POR',  value: `<@${muteAtivo.executorId}>`, inline: true },
+                { name: '⏱️ TEMPO RESTANTE', value: (() => {
+                    const d = Math.floor(tempoRestante / 86400000);
+                    const h = Math.floor((tempoRestante % 86400000) / 3600000);
+                    const m = Math.floor((tempoRestante % 3600000) / 60000);
+                    const s = Math.floor((tempoRestante % 60000) / 1000);
+                    return [d&&`${d}d`,h&&`${h}h`,m&&`${m}m`,s&&`${s}s`].filter(Boolean).join(' ') || '0s';
+                })(), inline: true },
+                { name: '📋 MOTIVO ORIGINAL', value: muteAtivo.motivo || 'Não informado.', inline: false }
+            )
+            .setFooter({ text: `Guild ID: ${newMember.guild.id}` })
+            .setTimestamp();
+
+        await enviarLog(newMember.guild, 'logs_castigo', logEmbed);
+
+        // DM para quem tentou remover (se identificado)
+        if (removedor) {
+            try {
+                await removedor.send({
+                    embeds: [new EmbedBuilder()
+                        .setColor('#8B0000')
+                        .setTitle('🔒 AÇÃO BLOQUEADA — RETH MORGAN')
+                        .setDescription(`Você tentou remover o castigo de <@${newMember.id}> sem autorização.\nApenas quem aplicou o castigo (<@${muteAtivo.executorId}>) pode removê-lo.\nO castigo foi reaplicado automaticamente.`)
+                        .setTimestamp()
+                    ]
+                });
+            } catch {}
+        }
+    } catch (e) {
+        console.error('[anti-remoção-castigo]', e.message);
+    }
+});
+
 // ── ANTI-MASS BAN ──
 client.on('guildBanAdd', async (ban) => {
     try {
@@ -644,38 +727,9 @@ client.on('channelDelete', async (channel) => {
     } catch (e) {}
 });
 
-// ============================================================
-//  HELPERS DA IA
-// ============================================================
-
-// Extrai o primeiro bloco JSON que contenha "acao" do texto,
-// mesmo que a IA escreva prefixos como "LIMPAR CHAT: { ... }"
-function extrairJsonAcao(texto) {
-    const match = texto.match(/\{[\s\S]*?"acao"[\s\S]*?\}/);
-    if (!match) return null;
-    try {
-        return JSON.parse(match[0]);
-    } catch (e) {
-        // Tenta pegar um bloco maior caso o primeiro match tenha ficado incompleto
-        const matchGuloso = texto.match(/\{[\s\S]*"acao"[\s\S]*\}/);
-        if (!matchGuloso) return null;
-        try { return JSON.parse(matchGuloso[0]); } catch { return null; }
-    }
-}
-
-// Remove todo o bloco JSON + prefixo de texto da resposta
-// para não exibir o JSON cru no chat
-function removerBlocoJson(texto) {
-    // Remove prefixo tipo "LIMPAR CHAT: " e o JSON em sequência
-    return texto.replace(/[A-ZÇÃÕÁÉÍÓÚ\s]+:\s*\{[\s\S]*?"acao"[\s\S]*?\}/g, '').trim();
-}
-
 // ── EVENTO CENTRAL: MENSAGENS ──
 client.on('messageCreate', async (message) => {
-    // ── GUARDIÕES: ignora bots, webhooks e o próprio bot ──
-    if (!message.guild) return;
-    if (message.author.bot) return;
-    if (message.webhookId) return;
+    if (!message.guild || message.author.bot || message.webhookId) return;
     if (message.author.id === client.user?.id) return;
 
     let data = { canaisComandos: [] };
@@ -789,7 +843,7 @@ client.on('messageCreate', async (message) => {
 
     // ── LIMITE DE MENÇÕES ──
     if (sc.limiteMencoes && !temPermissao) {
-        const limite  = parseInt(sc.limiteMencoes) || 5;
+        const limite  = parseInt(sc.maxMencoes || sc.limiteMencoes) || 5;
         const mencoes = message.mentions.users.size + message.mentions.roles.size;
         if (mencoes > limite) {
             await message.delete().catch(() => {});
@@ -880,13 +934,13 @@ Personalidade: direta, rápida, sem enrolação, sem palavras difíceis.
 
 STATUS DO OPERADOR: ${isDono ? "DONO DO BOT — ACESSO TOTAL LIBERADO." : "USUÁRIO COMUM — SEM ACESSO A AÇÕES."}
 
-${isDono ? `VOCÊ DEVE EXECUTAR AS ORDENS DO DONO. Para ações específicas, responda SOMENTE com o formato abaixo, sem texto extra, sem markdown, sem crases, sem prefixo nenhum (não escreva "LIMPAR CHAT:", "BAN:" ou qualquer texto antes do JSON):
+${isDono ? `VOCÊ DEVE EXECUTAR AS ORDENS DO DONO. Para ações específicas, responda SOMENTE com o formato abaixo, sem texto extra, sem markdown, sem crases:
 
-{ "acao": "ban", "motivo": "motivo deduzido", "resposta_chat": "Feito." }
-{ "acao": "clear", "quantidade": 100, "resposta_chat": "Feito." }
-{ "acao": "addRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
-{ "acao": "removeRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
-{ "acao": "removeAllRoles", "resposta_chat": "Feito." }
+BAN: { "acao": "ban", "motivo": "motivo deduzido", "resposta_chat": "Feito." }
+LIMPAR CHAT: { "acao": "clear", "quantidade": 100, "resposta_chat": "Feito." }
+ADICIONAR CARGO: { "acao": "addRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
+REMOVER CARGO: { "acao": "removeRole", "cargo": "nome ou id", "resposta_chat": "Feito." }
+REMOVER TODOS OS CARGOS: { "acao": "removeAllRoles", "resposta_chat": "Feito." }
 CRIAR COMANDO:
 [CRIAR_COMANDO]
 <nome_arquivo>nome.js</nome_arquivo>
@@ -903,7 +957,6 @@ REGRAS DE AÇÃO:
 - Frases como "tira o cargo X" → removeRole.
 - Use JSON/[CRIAR_COMANDO] SOMENTE quando o dono pedir explicitamente uma ação.
 - Para perguntas normais, mesmo do dono, responda em texto simples e direto.
-- NUNCA escreva prefixos antes do JSON como "BAN:", "LIMPAR CHAT:", "AÇÃO:" etc. Comece direto com { 
 
 ══════════════════════════════════════════
 REGRAS OBRIGATÓRIAS PARA CRIAÇÃO DE COMANDOS (Discord.js v14):
@@ -973,75 +1026,20 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
         const respostaIA = await perguntarParaIA(perguntaLimpa, diretrizesIA, message.channel.id);
         let textoResposta = respostaIA.trim();
 
-        // ── LIMPEZA DE MARKDOWN (crases triplas) ──
-        const crasesMarkdown = '```';
+        // ── LIMPEZA DE MARKDOWN ──
+        const crasesMarkdown = '\`\`\`';
         if (textoResposta.startsWith(crasesMarkdown)) {
             textoResposta = textoResposta.slice(3).trim();
             if (textoResposta.toLowerCase().startsWith('json')) textoResposta = textoResposta.slice(4).trim();
             if (textoResposta.endsWith(crasesMarkdown)) textoResposta = textoResposta.slice(0, -3).trim();
         }
 
-        // ── CRIAR COMANDO ── (prioridade: verificar antes do JSON)
-        // Aceita com ou sem colchetes [ ] no marcador
-        if ((textoResposta.includes('[CRIAR_COMANDO]') || textoResposta.includes('CRIAR_COMANDO')) && isDono) {
-            try {
-                const extrairTag = (tag, texto) => {
-                    const ini = texto.indexOf('<' + tag + '>');
-                    const fim = texto.indexOf('</' + tag + '>');
-                    if (ini === -1 || fim === -1) return null;
-                    return texto.slice(ini + tag.length + 2, fim).trim();
-                };
-                const nomeArquivo  = extrairTag('nome_arquivo', textoResposta);
-                const categoria    = (extrairTag('categoria_pasta', textoResposta) || 'utilitarios').toLowerCase();
-                const respostaChat = extrairTag('resposta_chat', textoResposta) || 'Pronto.';
-                const codigoJs     = extrairTag('codigo_js', textoResposta);
-
-                if (nomeArquivo && codigoJs) {
-                    const nomeFinal      = nomeArquivo.endsWith('.js') ? nomeArquivo : `${nomeArquivo}.js`;
-                    const pastaDestino   = path.join(__dirname, 'commands', categoria);
-                    if (!fs.existsSync(pastaDestino)) fs.mkdirSync(pastaDestino, { recursive: true });
-                    const caminhoArquivo = path.join(pastaDestino, nomeFinal);
-                    fs.writeFileSync(caminhoArquivo, codigoJs, 'utf-8');
-                    delete require.cache[require.resolve(caminhoArquivo)];
-                    const novoComando = require(caminhoArquivo);
-                    novoComando.category = categoria;
-                    client.commands.set(novoComando.name, novoComando);
-
-                    // Envia código no privado do dono para conferência
-                    try {
-                        const chunks = [];
-                        let cod = codigoJs;
-                        while (cod.length > 0) {
-                            chunks.push(cod.slice(0, 1800));
-                            cod = cod.slice(1800);
-                        }
-                        await message.author.send(`📦 **Comando compilado:** \`commands/${categoria}/${nomeFinal}\`\nConferência do código:`);
-                        for (const chunk of chunks) {
-                            await message.author.send(`\`\`\`js\n${chunk}\n\`\`\``);
-                        }
-                    } catch (e) {
-                        console.error('[Compilador] Não consegui enviar DM ao dono:', e.message);
-                    }
-
-                    return message.reply(`📩 **[Compilador]** ${respostaChat}\n\`commands/${categoria}/${nomeFinal}\`\nCódigo enviado no seu privado para conferência! ✅`);
-                } else {
-                    return message.reply("❌ Compilador: estrutura de tags incompleta. Verifique `<nome_arquivo>` e `<codigo_js>`.");
-                }
-            } catch (e) {
-                console.error("Erro no compilador:", e);
-                return message.reply("❌ Erro ao compilar o comando.");
-            }
-        }
-
         // ── EXECUÇÃO DE ORDENS JSON ──
-        // Usa regex para encontrar o JSON em qualquer parte da resposta,
-        // mesmo que a IA coloque prefixo como "LIMPAR CHAT: { ... }"
-        if (isDono) {
-            const ordem = extrairJsonAcao(textoResposta);
+        if (textoResposta.startsWith('{') && textoResposta.includes('"acao"')) {
+            try {
+                const ordem = JSON.parse(textoResposta);
 
-            if (ordem && ordem.acao) {
-                // ── BAN ──
-                if (ordem.acao === 'ban') {
+                if (ordem.acao === 'ban' && isDono) {
                     const membroAlvo = message.mentions.members.first();
                     if (!membroAlvo) return message.reply("⚠️ Marque quem quer banir.");
                     if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso banir um dos donos.");
@@ -1050,10 +1048,9 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
                     return message.reply(`🔨 ${ordem.resposta_chat}`);
                 }
 
-                // ── CLEAR ──
-                if (ordem.acao === 'clear') {
+                if (ordem.acao === 'clear' && isDono) {
                     let qtd = parseInt(ordem.quantidade) || 100;
-                    if (qtd < 1)   qtd = 1;
+                    if (qtd < 1) qtd = 1;
                     if (qtd > 100) qtd = 100;
                     await message.delete().catch(() => {});
                     const deletadas = await message.channel.bulkDelete(qtd, true).catch(() => null);
@@ -1064,8 +1061,7 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
                     return;
                 }
 
-                // ── ADD ROLE ──
-                if (ordem.acao === 'addRole') {
+                if (ordem.acao === 'addRole' && isDono) {
                     const membroAlvo = message.mentions.members.first();
                     if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
                     let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
@@ -1091,8 +1087,7 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
                     }
                 }
 
-                // ── REMOVE ROLE ──
-                if (ordem.acao === 'removeRole') {
+                if (ordem.acao === 'removeRole' && isDono) {
                     const membroAlvo = message.mentions.members.first();
                     if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
                     let cargoAlvo = message.guild.roles.cache.get(ordem.cargo)
@@ -1118,8 +1113,7 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
                     }
                 }
 
-                // ── REMOVE ALL ROLES ──
-                if (ordem.acao === 'removeAllRoles') {
+                if (ordem.acao === 'removeAllRoles' && isDono) {
                     const membroAlvo = message.mentions.members.first();
                     if (!membroAlvo) return message.reply("⚠️ Marque o usuário alvo.");
                     if (ehDono(membroAlvo.id)) return message.reply("⚠️ Não posso remover cargos de um dos donos.");
@@ -1140,21 +1134,62 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
                     }
                 }
 
-                // ação reconhecida mas sem handler → não exibe JSON, ignora silenciosamente
-                console.warn('[IA] Ação desconhecida recebida:', ordem.acao);
-                return;
+            } catch (e) { console.error("Erro ao decodificar ordem JSON:", e); }
+        }
+
+        // ── CRIAR COMANDO ──
+        // ✅ FIX: aceita com ou sem colchetes [ ] no marcador
+        if ((textoResposta.includes('[CRIAR_COMANDO]') || textoResposta.includes('CRIAR_COMANDO')) && isDono) {
+            try {
+                const extrairTag = (tag, texto) => {
+                    const ini = texto.indexOf('<' + tag + '>');
+                    const fim = texto.indexOf('</' + tag + '>');
+                    if (ini === -1 || fim === -1) return null;
+                    return texto.slice(ini + tag.length + 2, fim).trim();
+                };
+                const nomeArquivo  = extrairTag('nome_arquivo', textoResposta);
+                const categoria    = (extrairTag('categoria_pasta', textoResposta) || 'utilitarios').toLowerCase();
+                const respostaChat = extrairTag('resposta_chat', textoResposta) || 'Pronto.';
+                const codigoJs     = extrairTag('codigo_js', textoResposta);
+
+                if (nomeArquivo && codigoJs) {
+                    const nomeFinal      = nomeArquivo.endsWith('.js') ? nomeArquivo : `${nomeArquivo}.js`;
+                    const pastaDestino   = path.join(__dirname, 'commands', categoria);
+                    if (!fs.existsSync(pastaDestino)) fs.mkdirSync(pastaDestino, { recursive: true });
+                    const caminhoArquivo = path.join(pastaDestino, nomeFinal);
+                    fs.writeFileSync(caminhoArquivo, codigoJs, 'utf-8');
+                    delete require.cache[require.resolve(caminhoArquivo)];
+                    const novoComando = require(caminhoArquivo);
+                    novoComando.category = categoria;
+                    client.commands.set(novoComando.name, novoComando);
+
+                    // ── ENVIA CÓDIGO NO PRIVADO DO DONO PARA CONFERÊNCIA ──
+                    try {
+                        const chunks = [];
+                        let cod = codigoJs;
+                        while (cod.length > 0) {
+                            chunks.push(cod.slice(0, 1800));
+                            cod = cod.slice(1800);
+                        }
+                        await message.author.send(`📦 **Comando compilado:** \`commands/${categoria}/${nomeFinal}\`\nConferência do código:`);
+                        for (const chunk of chunks) {
+                            await message.author.send(`\`\`\`js\n${chunk}\n\`\`\``);
+                        }
+                    } catch (e) {
+                        console.error('[Compilador] Não consegui enviar DM ao dono:', e.message);
+                    }
+
+                    return message.reply(`📩 **[Compilador]** ${respostaChat}\n\`commands/${categoria}/${nomeFinal}\`\nCódigo enviado no seu privado para conferência! ✅`);
+                } else {
+                    return message.reply("❌ Compilador: estrutura de tags incompleta. Verifique `<nome_arquivo>` e `<codigo_js>`.");
+                }
+            } catch (e) {
+                console.error("Erro no compilador:", e);
+                return message.reply("❌ Erro ao compilar o comando.");
             }
         }
 
-        // ── RESPOSTA NORMAL ──
-        // Remove qualquer resquício de JSON que a IA possa ter colocado junto com texto
-        const respostaFinal = removerBlocoJson(textoResposta);
-
-        // Se depois de limpar ficou vazio, não responde nada (evita reply em branco)
-        if (!respostaFinal) return;
-
-        return message.reply(respostaFinal);
-
+        return message.reply(textoResposta);
     } catch (err) {
         console.error("Erro no processamento da IA:", err);
     }
