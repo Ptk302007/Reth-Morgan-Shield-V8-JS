@@ -33,13 +33,10 @@
   .topbar-logo span { color: var(--blood-bright); }
   .topbar-tag { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 3px; border-left: 1px solid #1a1e1a; padding-left: 20px; }
   .topbar-user { display: flex; align-items: center; gap: 10px; }
-
-  /* AVATAR CORRIGIDO */
   .topbar-avatar-wrap { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--blood); overflow: hidden; flex-shrink: 0; background: var(--blood-dim); display: flex; align-items: center; justify-content: center; }
   .topbar-avatar { width: 100%; height: 100%; object-fit: cover; filter: saturate(0.6); display: none; }
   .topbar-avatar.loaded { display: block; }
   .topbar-avatar-fallback { font-family: var(--font-display); font-size: 14px; color: var(--blood-bright); letter-spacing: 1px; line-height: 1; }
-
   .topbar-username { font-family: var(--font-mono); font-size: 12px; color: var(--text); }
   .topbar-badge { font-family: var(--font-mono); font-size: 9px; color: var(--blood-bright); border: 1px solid var(--blood-dim); background: rgba(139,0,0,0.1); padding: 3px 8px; letter-spacing: 2px; }
 
@@ -166,7 +163,6 @@
 <div class="shell">
 
   <nav class="sidebar">
-    <!-- INFRAESTRUTURA -->
     <div class="sidebar-section">
       <span class="sidebar-label">INFRAESTRUTURA</span>
       <div class="server-select-wrap">
@@ -176,7 +172,6 @@
       </div>
     </div>
 
-    <!-- PROTOCOLOS -->
     <div class="sidebar-section">
       <span class="sidebar-label">PROTOCOLOS</span>
       <a class="sidebar-item active" onclick="irParaSecao('sec-antinuke', this)">
@@ -185,15 +180,23 @@
       <a class="sidebar-item" onclick="irParaSecao('sec-filtros', this)">
         <span class="sidebar-dot"></span>FILTROS
       </a>
-      <a class="sidebar-item" onclick="irParaSecao('sec-canais', this)">
-        <span class="sidebar-dot"></span>CANAIS & LOGS
+      <a class="sidebar-item" onclick="irParaSecao('sec-logs', this)">
+        <span class="sidebar-dot"></span>LOGS & CANAIS
+      </a>
+      <a class="sidebar-item" onclick="irParaSecao('sec-automacao', this)">
+        <span class="sidebar-dot"></span>AUTOMAÇÃO
+      </a>
+      <a class="sidebar-item" onclick="irParaSecao('sec-diversao', this)">
+        <span class="sidebar-dot"></span>DIVERSÃO
       </a>
       <a class="sidebar-item" onclick="irParaSecao('sec-ia', this)">
         <span class="sidebar-dot"></span>IA MORGAN
       </a>
+      <a class="sidebar-item" onclick="irParaSecao('sec-punicoes', this)">
+        <span class="sidebar-dot"></span>PUNIÇÕES
+      </a>
     </div>
 
-    <!-- NAVEGAÇÃO -->
     <div class="sidebar-section">
       <span class="sidebar-label">NAVEGAÇÃO</span>
       <a class="sidebar-item" href="/chat">
@@ -234,19 +237,20 @@
         <button class="btn-panic" onclick="abrirConfirmPanico()">ACIONAR PROTOCOLO</button>
       </div>
 
-      <!-- SEÇÃO 01: ANTI-NUKE -->
+      <!-- ══ SEÇÃO 01: ANTI-NUKE ══ -->
       <div class="section" id="sec-antinuke">
         <div class="section-header">
           <div class="section-num">01</div>
           <div class="section-title">PROTOCOLOS ANTI-NUKE</div>
         </div>
+
         <div class="toggle-row">
           <div class="toggle-info"><div class="toggle-name">MÓDULO ANTI-NUKE</div><div class="toggle-desc">Revoga privilégios + timeout de quem deletar 3+ canais em 10 segundos.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antinuke"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="toggle-row">
-          <div class="toggle-info"><div class="toggle-name">TRAVA DE CONVITES</div><div class="toggle-desc">Bloqueia convites de Discord enviados no chat por membros sem permissão.</div></div>
-          <label class="toggle-switch"><input type="checkbox" id="travaConvites"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          <div class="toggle-info"><div class="toggle-name">TRAVA DE CONVITES (ANTI-INVITE)</div><div class="toggle-desc">Bloqueia convites de Discord enviados no chat por membros sem permissão.</div></div>
+          <label class="toggle-switch"><input type="checkbox" id="antiinvite"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="toggle-row">
           <div class="toggle-info"><div class="toggle-name">BLOQUEIO DE BOTS (ANTI-BOT)</div><div class="toggle-desc">Bane bots não autorizados e o executor da injeção ilícita automaticamente.</div></div>
@@ -264,6 +268,11 @@
           <div class="toggle-info"><div class="toggle-name">DETECTOR DE SELFBOTS</div><div class="toggle-desc">Timeout de 30 min para contas com padrão suspeito: +10 msgs em 5s ou 5 msgs idênticas seguidas.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="detectorSelfbots"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
+        <div class="toggle-row">
+          <div class="toggle-info"><div class="toggle-name">ANTI-CARGOS</div><div class="toggle-desc">Reverte atribuição não autorizada de cargos protegidos e registra o executor.</div></div>
+          <label class="toggle-switch"><input type="checkbox" id="anticargos"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+
         <div class="tape-sep" data-label="LIMITES DE PUNIÇÃO"></div>
         <div class="grid-2">
           <div>
@@ -281,6 +290,7 @@
             <div class="field" style="margin-top:2px;"><input type="number" id="maxKicks" placeholder="Máx. kicks/min (ex: 5)"></div>
           </div>
         </div>
+
         <div class="tape-sep" data-label="WHITELIST"></div>
         <div class="field">
           <label class="field-label">IDs CONFIÁVEIS — WHITELIST (separados por vírgula)</label>
@@ -288,12 +298,13 @@
         </div>
       </div>
 
-      <!-- SEÇÃO 02: FILTROS -->
+      <!-- ══ SEÇÃO 02: FILTROS ══ -->
       <div class="section" id="sec-filtros">
         <div class="section-header">
           <div class="section-num">02</div>
           <div class="section-title">FILTROS & MODERAÇÃO</div>
         </div>
+
         <div class="toggle-row">
           <div class="toggle-info"><div class="toggle-name">ANTI-FLOOD</div><div class="toggle-desc">Remove mensagens e avisa usuários que ultrapassem o limite em 4 segundos.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antiflood"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
@@ -305,10 +316,6 @@
         <div class="toggle-row" style="margin-top:2px;">
           <div class="toggle-info"><div class="toggle-name">ANTI-LINK</div><div class="toggle-desc">Remove links enviados por usuários sem permissão. Se domínios banidos estiverem preenchidos abaixo, só bloqueia esses.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="antilink"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info"><div class="toggle-name">ANTI-INVITE</div><div class="toggle-desc">Bloqueia convites de outros servidores Discord no chat.</div></div>
-          <label class="toggle-switch"><input type="checkbox" id="antiinvite"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="toggle-row">
           <div class="toggle-info"><div class="toggle-name">ANTI-PRECONCEITO</div><div class="toggle-desc">Apaga mensagens com palavras proibidas e registra um warn automático.</div></div>
@@ -328,36 +335,29 @@
             <label class="toggle-switch"><input type="checkbox" id="antiSpoiler"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
           </div>
         </div>
+
         <div class="tape-sep" data-label="LIMITES NUMÉRICOS"></div>
         <div class="num-pair">
           <div class="field">
             <label class="field-label">LIMITE DE MENÇÕES POR MENSAGEM</label>
-            <input type="number" id="limiteMencoes" placeholder="Ex: 5">
+            <input type="number" id="maxMencoes" placeholder="Ex: 5">
           </div>
           <div class="field">
             <label class="field-label">MÁXIMO DE EMOJIS POR MENSAGEM</label>
             <input type="number" id="maxEmojis" placeholder="Ex: 10">
           </div>
         </div>
-        <div class="toggle-row" style="margin-top:2px;">
-          <div class="toggle-info"><div class="toggle-name">FILTRO DE EMOJIS</div><div class="toggle-desc">Ativa o limite de emojis por mensagem definido acima.</div></div>
-          <label class="toggle-switch"><input type="checkbox" id="filtroEmojis"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
-        </div>
-        <div class="tape-sep" data-label="PUNIÇÕES AUTOMÁTICAS"></div>
-        <div class="num-pair">
-          <div class="field">
-            <label class="field-label">BAN AUTOMÁTICO AO ATINGIR X WARNS</label>
-            <input type="number" id="autoPunicaoWarns" placeholder="Ex: 3">
+        <div class="grid-2" style="margin-top:2px;">
+          <div class="toggle-row">
+            <div class="toggle-info"><div class="toggle-name">FILTRO DE EMOJIS</div><div class="toggle-desc">Ativa o limite de emojis por mensagem definido acima.</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="filtroEmojis"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
           </div>
-          <div class="field">
-            <label class="field-label">LIMPEZA AGENDADA A CADA X HORAS</label>
-            <input type="number" id="horasLimpeza" placeholder="Ex: 24">
+          <div class="toggle-row">
+            <div class="toggle-info"><div class="toggle-name">LIMITE DE MENÇÕES</div><div class="toggle-desc">Ativa o limite de menções por mensagem definido acima.</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="limiteMencoes"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
           </div>
         </div>
-        <div class="toggle-row" style="margin-top:2px;">
-          <div class="toggle-info"><div class="toggle-name">LIMPEZA AGENDADA</div><div class="toggle-desc">Limpa automaticamente o canal de logs no intervalo configurado acima.</div></div>
-          <label class="toggle-switch"><input type="checkbox" id="limpezaAgendada"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
-        </div>
+
         <div class="tape-sep" data-label="DOMÍNIOS & PUNIÇÕES"></div>
         <div class="field">
           <label class="field-label">DOMÍNIOS BANIDOS (separados por vírgula — vazio = bloqueia todos)</label>
@@ -373,13 +373,14 @@
         </div>
       </div>
 
-      <!-- SEÇÃO 03: CANAIS & LOGS -->
-      <div class="section" id="sec-canais">
+      <!-- ══ SEÇÃO 03: LOGS & CANAIS ══ -->
+      <div class="section" id="sec-logs">
         <div class="section-header">
           <div class="section-num">03</div>
-          <div class="section-title">CANAIS & LOGS</div>
+          <div class="section-title">LOGS & CANAIS</div>
         </div>
-        <div class="tape-sep" data-label="LOGS DE SEGURANÇA"></div>
+
+        <div class="tape-sep" data-label="LOGS DE SEGURANÇA & STAFF"></div>
         <div class="num-pair">
           <div class="field"><label class="field-label">CANAL DE LOGS DE SEGURANÇA</label><input type="text" id="logs_seguranca" placeholder="ID do canal"></div>
           <div class="field"><label class="field-label">CANAL DE LOGS DE STAFF</label><input type="text" id="logs_staff" placeholder="ID do canal"></div>
@@ -388,39 +389,133 @@
           <div class="field"><label class="field-label">CANAL DE LOGS DE MENSAGENS</label><input type="text" id="logs_msg" placeholder="ID do canal"></div>
           <div class="field"><label class="field-label">CANAL DE LOGS DE ANTI-CARGOS</label><input type="text" id="logs_anticargos" placeholder="ID do canal"></div>
         </div>
+
+        <div class="tape-sep" data-label="LOGS DE PUNIÇÕES"></div>
+        <div class="num-pair">
+          <div class="field"><label class="field-label">CANAL DE BAN / UNBAN</label><input type="text" id="logs_ban" placeholder="ID do canal"></div>
+          <div class="field"><label class="field-label">CANAL DE CASTIGO / DESCASTIGO</label><input type="text" id="logs_castigo" placeholder="ID do canal"></div>
+        </div>
+        <div class="num-pair" style="margin-top:2px;">
+          <div class="field"><label class="field-label">CANAL DE MUTE / UNMUTE</label><input type="text" id="logs_mute" placeholder="ID do canal"></div>
+          <div class="field"><label class="field-label">CANAL DE WARNS</label><input type="text" id="logs_warn" placeholder="ID do canal"></div>
+        </div>
+
         <div class="tape-sep" data-label="MEMBROS & BOAS-VINDAS"></div>
         <div class="num-pair">
-          <div class="field"><label class="field-label">CANAL DE LOGS JOIN/LEAVE</label><input type="text" id="logs_join" placeholder="ID do canal"></div>
+          <div class="field"><label class="field-label">CANAL DE LOGS JOIN / LEAVE</label><input type="text" id="logs_join" placeholder="ID do canal"></div>
           <div class="field"><label class="field-label">CANAL DE BOAS-VINDAS (mensagem pública)</label><input type="text" id="msg_join" placeholder="ID do canal"></div>
         </div>
-        <div class="field" style="margin-top:2px;">
-          <label class="field-label">ID DO CARGO DE AUTOROLE (cargo dado ao entrar)</label>
-          <input type="text" id="autorole" placeholder="ID do cargo">
-        </div>
-        <div class="tape-sep" data-label="CANAL PRINCIPAL DE LOGS"></div>
+
+        <div class="tape-sep" data-label="CANAL GERAL DE LOGS"></div>
         <div class="field">
           <label class="field-label">CANAL GERAL DE LOGS (usado para limpeza agendada)</label>
           <input type="text" id="logChannelId" placeholder="ID do canal">
         </div>
       </div>
 
-      <!-- SEÇÃO 04: IA MORGAN -->
-      <div class="section" id="sec-ia">
+      <!-- ══ SEÇÃO 04: AUTOMAÇÃO ══ -->
+      <div class="section" id="sec-automacao">
         <div class="section-header">
           <div class="section-num">04</div>
+          <div class="section-title">AUTOMAÇÃO & CONFIGURAÇÕES</div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">ID DO CARGO DE AUTOROLE (cargo dado ao entrar)</label>
+          <input type="text" id="autorole" placeholder="ID do cargo">
+        </div>
+        <div class="field" style="margin-top:2px;">
+          <label class="field-label">IDs DE CARGOS IMUNES (bypass_roles — separados por vírgula)</label>
+          <input type="text" id="bypass_roles" placeholder="Ex: 123456789, 987654321">
+        </div>
+        <div class="field" style="margin-top:2px;">
+          <label class="field-label">IDs DE CARGOS PROTEGIDOS (anti-cargos — separados por vírgula)</label>
+          <input type="text" id="cargos_protegidos" placeholder="Ex: 123456789, 987654321">
+        </div>
+
+        <div class="tape-sep" data-label="PUNIÇÕES AUTOMÁTICAS"></div>
+        <div class="num-pair">
+          <div class="field">
+            <label class="field-label">BAN AUTOMÁTICO AO ATINGIR X WARNS</label>
+            <input type="number" id="autoPunicaoWarns" placeholder="Ex: 3">
+          </div>
+          <div class="field">
+            <label class="field-label">LIMPEZA AGENDADA A CADA X HORAS</label>
+            <input type="number" id="horasLimpeza" placeholder="Ex: 24">
+          </div>
+        </div>
+        <div class="toggle-row" style="margin-top:2px;">
+          <div class="toggle-info"><div class="toggle-name">LIMPEZA AGENDADA</div><div class="toggle-desc">Limpa automaticamente o canal de logs no intervalo configurado acima.</div></div>
+          <label class="toggle-switch"><input type="checkbox" id="limpezaAgendada"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+        </div>
+      </div>
+
+      <!-- ══ SEÇÃO 05: DIVERSÃO ══ -->
+      <div class="section" id="sec-diversao">
+        <div class="section-header">
+          <div class="section-num">05</div>
+          <div class="section-title">DIVERSÃO & ECONOMY</div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">CANAL DE FUN (comandos fun restritos aqui)</label>
+          <input type="text" id="canal_fun" placeholder="ID do canal (vazio = sem restrição)">
+        </div>
+        <div class="grid-2" style="margin-top:2px;">
+          <div class="toggle-row">
+            <div class="toggle-info"><div class="toggle-name">SISTEMA DE XP</div><div class="toggle-desc">Ativa o sistema de XP por mensagens no servidor.</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="xp_ativo"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info"><div class="toggle-name">ECONOMY (COINS)</div><div class="toggle-desc">Ativa o sistema de economia e moedas do servidor.</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="coins_ativo"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SEÇÃO 06: IA MORGAN ══ -->
+      <div class="section" id="sec-ia">
+        <div class="section-header">
+          <div class="section-num">06</div>
           <div class="section-title">IA MORGAN</div>
         </div>
+
         <div class="toggle-row">
           <div class="toggle-info"><div class="toggle-name">ATIVAR IA MORGAN</div><div class="toggle-desc">Permite que membros interajam com a IA via "morgan," ou menção ao bot neste servidor.</div></div>
           <label class="toggle-switch"><input type="checkbox" id="morgan_ativo"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
         </div>
         <div class="field" style="margin-top:2px;">
           <label class="field-label">CANAL EXCLUSIVO DA IA (todas as mensagens aqui ativam a IA)</label>
-          <input type="text" id="morgan_canal" placeholder="ID do canal (deixe vazio para desativar)">
+          <input type="text" id="morgan_canal" placeholder="ID do canal (vazio = desativado)">
         </div>
       </div>
 
-    </div>
+      <!-- ══ SEÇÃO 07: PUNIÇÕES ══ -->
+      <div class="section" id="sec-punicoes">
+        <div class="section-header">
+          <div class="section-num">07</div>
+          <div class="section-title">CONFIGURAÇÕES DE PUNIÇÕES</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="toggle-row">
+            <div class="toggle-info"><div class="toggle-name">CONFIRMAÇÃO DE BAN</div><div class="toggle-desc">Exige confirmação antes de executar um ban via comando.</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="ban_confirmacao"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info"><div class="toggle-name">CONFIRMAÇÃO DE CASTIGO</div><div class="toggle-desc">Exige confirmação antes de aplicar timeout/castigo via comando.</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="castigo_confirmacao"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+        </div>
+
+        <div class="tape-sep" data-label="GIF DE BAN"></div>
+        <div class="field">
+          <label class="field-label">URL DO GIF DE BAN (exibido no embed ao banir)</label>
+          <input type="text" id="gif_ban" placeholder="Ex: https://tenor.com/view/...">
+        </div>
+      </div>
+
+    </div><!-- /management-area -->
   </main>
 </div>
 
@@ -445,7 +540,6 @@
 <script>
   /* DATA_INJECTION */
 
-  // ── AVATAR CORRIGIDO ──
   function inicializarAvatar(username, avatarUrl) {
     const img      = document.getElementById('user-avatar');
     const fallback = document.getElementById('user-avatar-fallback');
@@ -502,30 +596,74 @@
           const el = document.getElementById(id);
           if (!el) return;
           if (el.type === 'checkbox') el.checked = !!val;
-          else el.value = val || '';
+          else el.value = (val !== null && val !== undefined) ? val : '';
         };
-        set('antinuke', data.antinuke); set('travaConvites', data.travaConvites);
-        set('bloqueioBots', data.bloqueioBots || data.antibot);
-        set('antifake', data.antifake); set('diasFake', data.diasFake || 7);
+
+        // Anti-Nuke
+        set('antinuke',         data.antinuke);
+        set('antiinvite',       data.antiinvite);
+        set('bloqueioBots',     data.bloqueioBots || data.antibot);
+        set('antifake',         data.antifake);
+        set('diasFake',         data.diasFake || 7);
         set('detectorSelfbots', data.detectorSelfbots);
-        set('antiMassBan', data.antiMassBan); set('maxBans', data.maxBans || 5);
-        set('antiMassKick', data.antiMassKick); set('maxKicks', data.maxKicks || 5);
-        set('whitelistIds', data.whitelistIds);
-        set('antiflood', data.antiflood); set('limiteFlood', data.limiteFlood || 5);
-        set('antilink', data.antilink); set('antiinvite', data.antiinvite);
-        set('antipreconceito', data.antipreconceito); set('autoModNomes', data.autoModNomes);
-        set('antiCapsLock', data.antiCapsLock || data.anticaps);
-        set('antiSpoiler', data.antiSpoiler); set('limiteMencoes', data.limiteMencoes || 5);
-        set('filtroEmojis', data.filtroEmojis); set('maxEmojis', data.maxEmojis || 10);
+        set('anticargos',       data.anticargos);
+        set('antiMassBan',      data.antiMassBan);
+        set('maxBans',          data.maxBans || 5);
+        set('antiMassKick',     data.antiMassKick);
+        set('maxKicks',         data.maxKicks || 5);
+        set('whitelistIds',     data.whitelistIds);
+
+        // Filtros
+        set('antiflood',      data.antiflood);
+        set('limiteFlood',    data.limiteFlood || 5);
+        set('antilink',       data.antilink);
+        set('antipreconceito',data.antipreconceito);
+        set('autoModNomes',   data.autoModNomes);
+        set('antiCapsLock',   data.antiCapsLock || data.anticaps);
+        set('antiSpoiler',    data.antiSpoiler);
+        set('maxMencoes',     data.maxMencoes || 5);
+        set('maxEmojis',      data.maxEmojis || 10);
+        set('filtroEmojis',   data.filtroEmojis);
+        set('limiteMencoes',  data.limiteMencoes);
+        set('filtroLinks',    data.filtroLinks);
+        set('customPunishMsg',data.customPunishMsg);
+        set('mutedRoleId',    data.mutedRoleId);
+
+        // Logs
+        set('logs_seguranca', data.logs_seguranca);
+        set('logs_staff',     data.logs_staff);
+        set('logs_msg',       data.logs_msg);
+        set('logs_anticargos',data.logs_anticargos);
+        set('logs_ban',       data.logs_ban);
+        set('logs_castigo',   data.logs_castigo);
+        set('logs_mute',      data.logs_mute);
+        set('logs_warn',      data.logs_warn);
+        set('logs_join',      data.logs_join);
+        set('msg_join',       data.msg_join);
+        set('logChannelId',   data.logChannelId);
+
+        // Automação
+        set('autorole',         data.autorole);
+        set('bypass_roles',     Array.isArray(data.bypass_roles) ? data.bypass_roles.join(', ') : (data.bypass_roles || ''));
+        set('cargos_protegidos',Array.isArray(data.cargos_protegidos) ? data.cargos_protegidos.join(', ') : (data.cargos_protegidos || ''));
         set('autoPunicaoWarns', data.autoPunicaoWarns || 3);
-        set('limpezaAgendada', data.limpezaAgendada); set('horasLimpeza', data.horasLimpeza || 24);
-        set('filtroLinks', data.filtroLinks); set('customPunishMsg', data.customPunishMsg);
-        set('mutedRoleId', data.mutedRoleId);
-        set('logs_seguranca', data.logs_seguranca); set('logs_staff', data.logs_staff);
-        set('logs_msg', data.logs_msg); set('logs_anticargos', data.logs_anticargos);
-        set('logs_join', data.logs_join); set('msg_join', data.msg_join);
-        set('autorole', data.autorole); set('logChannelId', data.logChannelId);
-        set('morgan_ativo', data.morgan_ativo); set('morgan_canal', data.morgan_canal);
+        set('horasLimpeza',     data.horasLimpeza || 24);
+        set('limpezaAgendada',  data.limpezaAgendada);
+
+        // Diversão
+        set('canal_fun',   data.canal_fun);
+        set('xp_ativo',    data.xp_ativo !== false);
+        set('coins_ativo', data.coins_ativo !== false);
+
+        // IA
+        set('morgan_ativo', data.morgan_ativo);
+        set('morgan_canal', data.morgan_canal);
+
+        // Punições
+        set('ban_confirmacao',     data.ban_confirmacao !== false);
+        set('castigo_confirmacao', data.castigo_confirmacao !== false);
+        set('gif_ban',             data.gif_ban);
+
         document.getElementById('save-status').innerHTML = 'STATUS — <span>PRONTO</span>';
       })
       .catch(() => {
@@ -536,40 +674,106 @@
   function salvarAlteracoes() {
     const guildId = document.getElementById('serverSelect').value;
     if (!guildId) return showToast('Selecione um servidor primeiro.', 'error');
-    const get = id => { const el = document.getElementById(id); if (!el) return undefined; return el.type === 'checkbox' ? el.checked : el.value; };
+
+    const get = id => {
+      const el = document.getElementById(id);
+      if (!el) return undefined;
+      return el.type === 'checkbox' ? el.checked : el.value;
+    };
+
+    // Converte campos de array (bypass_roles, cargos_protegidos)
+    const parseLista = id => {
+      const val = get(id);
+      if (!val || !val.trim()) return [];
+      return val.split(',').map(s => s.trim()).filter(Boolean);
+    };
+
     const payload = {
       guildId,
-      antinuke: get('antinuke'), travaConvites: get('travaConvites'),
-      bloqueioBots: get('bloqueioBots'), antibot: get('bloqueioBots'),
-      antifake: get('antifake'), diasFake: get('diasFake'),
+
+      // Anti-Nuke
+      antinuke:         get('antinuke'),
+      antiinvite:       get('antiinvite'),
+      bloqueioBots:     get('bloqueioBots'),
+      antibot:          get('bloqueioBots'), // alias para o bot
+      antifake:         get('antifake'),
+      diasFake:         get('diasFake'),
       detectorSelfbots: get('detectorSelfbots'),
-      antiMassBan: get('antiMassBan'), maxBans: get('maxBans'),
-      antiMassKick: get('antiMassKick'), maxKicks: get('maxKicks'),
-      whitelistIds: get('whitelistIds'),
-      antiflood: get('antiflood'), limiteFlood: get('limiteFlood'),
-      antilink: get('antilink'), antiinvite: get('antiinvite'),
-      antipreconceito: get('antipreconceito'), autoModNomes: get('autoModNomes'),
-      antiCapsLock: get('antiCapsLock'), anticaps: get('antiCapsLock'),
-      antiSpoiler: get('antiSpoiler'), limiteMencoes: get('limiteMencoes'),
-      filtroEmojis: get('filtroEmojis'), maxEmojis: get('maxEmojis'),
-      autoPunicaoWarns: get('autoPunicaoWarns'),
-      limpezaAgendada: get('limpezaAgendada'), horasLimpeza: get('horasLimpeza'),
-      filtroLinks: get('filtroLinks'), customPunishMsg: get('customPunishMsg'),
-      mutedRoleId: get('mutedRoleId'),
-      logs_seguranca: get('logs_seguranca'), logs_staff: get('logs_staff'),
-      logs_msg: get('logs_msg'), logs_anticargos: get('logs_anticargos'),
-      logs_join: get('logs_join'), msg_join: get('msg_join'),
-      autorole: get('autorole'), logChannelId: get('logChannelId'),
-      morgan_ativo: get('morgan_ativo'), morgan_canal: get('morgan_canal')
+      anticargos:       get('anticargos'),
+      antiMassBan:      get('antiMassBan'),
+      maxBans:          get('maxBans'),
+      antiMassKick:     get('antiMassKick'),
+      maxKicks:         get('maxKicks'),
+      whitelistIds:     get('whitelistIds'),
+
+      // Filtros
+      antiflood:       get('antiflood'),
+      limiteFlood:     get('limiteFlood'),
+      antilink:        get('antilink'),
+      antipreconceito: get('antipreconceito'),
+      autoModNomes:    get('autoModNomes'),
+      antiCapsLock:    get('antiCapsLock'),
+      anticaps:        get('antiCapsLock'), // alias para o bot
+      antiSpoiler:     get('antiSpoiler'),
+      maxMencoes:      get('maxMencoes'),
+      maxEmojis:       get('maxEmojis'),
+      filtroEmojis:    get('filtroEmojis'),
+      limiteMencoes:   get('limiteMencoes'),
+      filtroLinks:     get('filtroLinks'),
+      customPunishMsg: get('customPunishMsg'),
+      mutedRoleId:     get('mutedRoleId'),
+
+      // Logs
+      logs_seguranca:  get('logs_seguranca'),
+      logs_staff:      get('logs_staff'),
+      logs_msg:        get('logs_msg'),
+      logs_anticargos: get('logs_anticargos'),
+      logs_ban:        get('logs_ban'),
+      logs_castigo:    get('logs_castigo'),
+      logs_mute:       get('logs_mute'),
+      logs_warn:       get('logs_warn'),
+      logs_join:       get('logs_join'),
+      msg_join:        get('msg_join'),
+      logChannelId:    get('logChannelId'),
+
+      // Automação
+      autorole:          get('autorole'),
+      bypass_roles:      parseLista('bypass_roles'),
+      cargos_protegidos: parseLista('cargos_protegidos'),
+      autoPunicaoWarns:  get('autoPunicaoWarns'),
+      horasLimpeza:      get('horasLimpeza'),
+      limpezaAgendada:   get('limpezaAgendada'),
+
+      // Diversão
+      canal_fun:   get('canal_fun'),
+      xp_ativo:    get('xp_ativo'),
+      coins_ativo: get('coins_ativo'),
+
+      // IA
+      morgan_ativo: get('morgan_ativo'),
+      morgan_canal: get('morgan_canal'),
+
+      // Punições
+      ban_confirmacao:     get('ban_confirmacao'),
+      castigo_confirmacao: get('castigo_confirmacao'),
+      gif_ban:             get('gif_ban'),
     };
+
     document.getElementById('save-status').innerHTML = 'STATUS — <span>GRAVANDO...</span>';
     fetch('/api/config/save', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
     .then(r => r.json())
-    .then(res => { showToast(res.message || 'Protocolos gravados.'); document.getElementById('save-status').innerHTML = 'STATUS — <span>SALVO</span>'; })
-    .catch(() => { showToast('Erro ao gravar.', 'error'); document.getElementById('save-status').innerHTML = 'STATUS — <span style="color:var(--blood-bright)">FALHA</span>'; });
+    .then(res => {
+      showToast(res.message || 'Protocolos gravados.');
+      document.getElementById('save-status').innerHTML = 'STATUS — <span>SALVO</span>';
+    })
+    .catch(() => {
+      showToast('Erro ao gravar.', 'error');
+      document.getElementById('save-status').innerHTML = 'STATUS — <span style="color:var(--blood-bright)">FALHA</span>';
+    });
   }
 
   function abrirConfirmPanico() {
@@ -580,9 +784,14 @@
   function confirmarPanico() {
     fecharOverlay();
     const guildId = document.getElementById('serverSelect').value;
-    fetch('/api/config/panic', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId }) })
-      .then(r => r.json()).then(res => showToast(res.message || 'Lockdown acionado.'))
-      .catch(() => showToast('Erro ao acionar protocolo.', 'error'));
+    fetch('/api/config/panic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guildId })
+    })
+    .then(r => r.json())
+    .then(res => showToast(res.message || 'Lockdown acionado.'))
+    .catch(() => showToast('Erro ao acionar protocolo.', 'error'));
   }
 </script>
 </body>
