@@ -1,49 +1,34 @@
-// commands/security/painel.js
-// Reth Morgan Shield System V8 — Painel Redesenhado
 'use strict';
-
-const {
-    EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-} = require('discord.js');
+// ============================================================
+//  RETH MORGAN — PAINEL V9 (REMASTER)
+//  Tema: Dexter Morgan | Foto executor/bot | Todos os logs
+//  GIF de ban configurável | Confirmações configuráveis
+// ============================================================
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs   = require('fs');
 const path = require('path');
 
-// ─── IDs dos donos (deve espelhar o index.js) ────────────────────────────────
-const OWNER_IDS = ['1507543140800921610', '1272650221402194095'];
-
-function ehDono(userId) {
-    return OWNER_IDS.includes(userId);
-}
-
 module.exports = {
     name: 'painel',
-    aliases: ['config', 'dashboard', 'setup'],
+    aliases: ['config', 'dashboard', 'setup', 'panel'],
 
     execute: async (msg, args, client, OWNER_ID) => {
-        // ✅ FIX: agora aceita qualquer ID do array OWNER_IDS
-        const eDonoSupremo = ehDono(msg.author.id);
+        const OWNER_IDS    = [OWNER_ID, '1272650221402194095'];
+        const eDonoSupremo = OWNER_IDS.includes(msg.author.id);
         const eDonoServer  = msg.author.id === msg.guild.ownerId;
 
         if (!eDonoSupremo && !eDonoServer) {
             return msg.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor('#f53b57')
-                        .setTitle('🔒 ACESSO NEGADO — ÁREA RESTRITA')
-                        .setDescription(
-                            '> Este painel é reservado ao **Proprietário do servidor** ou ao **Desenvolvedor Supremo**.\n\n' +
-                            '`Credenciais insuficientes. Acesso bloqueado por protocolos de segurança.`'
-                        )
-                        .setFooter({ text: 'RETH MORGAN SHIELD SYSTEM V8' })
-                        .setTimestamp()
+                embeds: [new EmbedBuilder()
+                    .setColor('#8B0000')
+                    .setAuthor({ name: 'RETH MORGAN — ACESSO NEGADO', iconURL: client.user.displayAvatarURL() })
+                    .setDescription('👑 Apenas o **Proprietário do Servidor** ou o **Desenvolvedor Supremo** podem acessar o painel.')
+                    .setTimestamp()
                 ]
             });
         }
 
-        // ─── I/O de configurações ─────────────────────────────────────────────
+        // ─── I/O ─────────────────────────────────────────────────
 
         function obterConfigs() {
             let configs = {};
@@ -51,582 +36,533 @@ module.exports = {
                 const raw = fs.readFileSync('./database/config.json', 'utf-8');
                 if (raw.trim()) configs = JSON.parse(raw);
             } catch { configs = {}; }
-
             if (!configs[msg.guild.id]) configs[msg.guild.id] = {};
             const sc = configs[msg.guild.id];
-
             const defaults = {
+                // Chat
                 antiflood: false, limiteFlood: 5,
                 antilink: false, antiinvite: false,
                 anticaps: false, antipreconceito: false,
                 antiSpoiler: false, filtroEmojis: false, maxEmojis: 10,
-                limiteMencoes: false,
+                limiteMencoes: false, maxMencoes: 5,
+                // Segurança
                 antibot: false, antinuke: false,
-                antiMassBan: false, maxBans: 5,
-                antiMassKick: false, maxKicks: 5,
                 anticargos: false, cargos_protegidos: [],
                 antifake: false, diasFake: 7,
+                antiMassBan: false, maxBans: 5,
+                antiMassKick: false, maxKicks: 5,
                 detectorSelfbots: false,
                 autoModNomes: false,
+                // Logs
                 logs_seguranca: null, logs_staff: null,
                 logs_msg: null, logs_join: null,
                 logs_anticargos: null,
-                autorole: null, msg_join: null,
-                bypass_roles: [],
-                canal_fun: null, xp_ativo: true, coins_ativo: true,
-                morgan_ativo: false, morgan_canal: null,
+                logs_ban: null, logs_castigo: null, logs_mute: null,
+                logs_warn: null,
+                // Automação
+                autorole: null, msg_join: null, bypass_roles: [],
+                whitelistIds: '',
                 autoPunicaoWarns: 3,
                 limpezaAgendada: false, horasLimpeza: 24,
+                // Diversão
+                canal_fun: null, xp_ativo: true, coins_ativo: true,
+                // I.A.
+                morgan_ativo: false, morgan_canal: null,
+                // Punições
+                ban_confirmacao: true, castigo_confirmacao: true,
+                gif_ban: '',
             };
-
             for (const [k, v] of Object.entries(defaults)) {
                 if (sc[k] === undefined) sc[k] = v;
             }
             if (!Array.isArray(sc.bypass_roles))      sc.bypass_roles = [];
             if (!Array.isArray(sc.cargos_protegidos)) sc.cargos_protegidos = [];
-
             return { configs, sc };
         }
-
         function salvarConfigs(dados) {
             fs.writeFileSync('./database/config.json', JSON.stringify(dados, null, 2));
         }
 
-        // ─── Helpers ──────────────────────────────────────────────────────────
+        // ─── Helpers de display ───────────────────────────────────
 
-        const ON  = '`✅ ON `';
-        const OFF = '`❌ OFF`';
-        const statusIcon = (v) => v ? ON : OFF;
-        const nomeCanal  = (id) => id ? `<#${id}>` : '`—`';
-        const nomeCargo  = (id) => id ? `<@&${id}>` : '`—`';
+        const on  = (v) => v ? '🟢 `ATIVO`'    : '🔴 `INATIVO`';
+        const onB = (v) => v ? '✅ `ATIVO`'     : '❌ `DESATIVADO`';
+        const ch  = (id) => id ? `<#${id}>`       : '`Não definido`';
+        const ro  = (id) => id ? `<@&${id}>`      : '`Não definido`';
 
-        // Barra de progresso de features ativas
-        function barraStatus(sc) {
-            const toggles = [
-                sc.antiflood, sc.antilink, sc.antiinvite, sc.anticaps,
-                sc.antipreconceito, sc.antibot, sc.antinuke, sc.anticargos,
-                sc.antifake, sc.antiMassBan, sc.antiMassKick,
-                sc.detectorSelfbots, sc.morgan_ativo
-            ];
-            const ativas = toggles.filter(Boolean).length;
-            const total  = toggles.length;
-            const blocos = Math.round((ativas / total) * 10);
-            const barra  = '█'.repeat(blocos) + '░'.repeat(10 - blocos);
-            return { barra, ativas, total };
-        }
+        const botAvatar = client.user.displayAvatarURL({ size: 256 });
+        const guildIcon = msg.guild.iconURL({ size: 256 }) || botAvatar;
+        const execAvatar = msg.author.displayAvatarURL({ dynamic: true, size: 256 });
 
-        // ─── EMBEDS ───────────────────────────────────────────────────────────
+        // ─── EMBEDS ───────────────────────────────────────────────
 
-        function gerarEmbedHome() {
-            const { barra, ativas, total } = barraStatus(obterConfigs().sc);
-            const guild = msg.guild;
+        function embedHome() {
             return new EmbedBuilder()
-                .setColor('#5865f2')
-                .setAuthor({
-                    name: 'RETH MORGAN — SHIELD SYSTEM V8',
-                    iconURL: client.user.displayAvatarURL()
-                })
-                .setTitle(`🛡️ Central de Operações — ${guild.name}`)
-                .setThumbnail(guild.iconURL({ dynamic: true }) || client.user.displayAvatarURL())
+                .setColor('#8B0000')
+                .setAuthor({ name: `RETH MORGAN — CENTRAL DE CONTROLE`, iconURL: botAvatar })
+                .setThumbnail(guildIcon)
+                .setTitle(`🩸 PAINEL DO SERVIDOR — ${msg.guild.name.toUpperCase()}`)
                 .setDescription(
-                    `> **Operador:** <@${msg.author.id}>\n` +
-                    `> **Servidor:** \`${guild.name}\` · \`${guild.memberCount}\` membros\n` +
-                    `> **Status do Bot:** 🟢 Online · \`${client.guilds.cache.size}\` servidores\n\n` +
-                    `**Proteções Ativas:** \`${ativas}/${total}\`\n` +
-                    `\`\`\`\n[${barra}] ${Math.round((ativas / total) * 100)}%\n\`\`\``
+                    '```\n' +
+                    '   SHIELD SYSTEM V8 · DEXTER PROTOCOL\n' +
+                    '   "Toda boa morte precisa de planejamento."\n' +
+                    '```\n' +
+                    '**Navegue pelas seções para configurar o sistema:**\n\n' +
+                    '🛑 **Chat** — Filtros e moderação de mensagens\n' +
+                    '☢️ **Segurança** — Proteções anti-raid e nuke\n' +
+                    '📋 **Logs** — Canais de registro (ban, mute, castigo...)\n' +
+                    '⚙️ **Automação** — Auto-role, boas-vindas, warns\n' +
+                    '🎮 **Diversão** — Canal fun, XP e economy\n' +
+                    '🤖 **I.A. Morgan** — IA e canal exclusivo\n' +
+                    '🔫 **Punições** — GIF ban, confirmações, whitelist'
                 )
                 .addFields(
-                    { name: '🛑  Chat & Filtros',      value: 'Flood · Links · Caps · Emojis · Menções', inline: true },
-                    { name: '☢️  Segurança Anti-Raid', value: 'Nuke · Bot · Fake · Mass Ban/Kick', inline: true },
-                    { name: '📋  Logs & Registros',    value: 'Segurança · Staff · Mensagens · Joins', inline: true },
-                    { name: '⚙️  Automação',           value: 'Auto-Role · Boas-Vindas · Bypass', inline: true },
-                    { name: '🎮  Diversão',             value: 'Canal Fun · XP · Economy', inline: true },
-                    { name: '🤖  I.A. Morgan',          value: 'Canal · Status · Inteligência', inline: true },
+                    { name: '👤 Operador', value: `<@${msg.author.id}>\n\`${msg.author.tag}\``, inline: true },
+                    { name: '📅 Sessão',   value: `<t:${Math.floor(Date.now()/1000)}:R>`, inline: true },
+                    { name: '🤖 Bot',      value: `\`${client.user.tag}\``, inline: true }
                 )
-                .setFooter({ text: `RETH MORGAN V8  •  ${new Date().toLocaleString('pt-BR')}` });
+                .setImage(msg.guild.bannerURL({ size: 1024 }) || null)
+                .setFooter({ text: `Shield System V8 · Aberto por ${msg.author.tag}`, iconURL: execAvatar })
+                .setTimestamp();
         }
 
-        function gerarEmbedChat(sc) {
+        function embedChat(sc) {
             return new EmbedBuilder()
-                .setColor('#3498db')
-                .setAuthor({ name: 'RETH MORGAN — FILTROS DE CHAT', iconURL: client.user.displayAvatarURL() })
-                .setTitle('🛑 Moderação de Mensagens')
-                .setDescription('> Controle o conteúdo do chat em tempo real. Clique nos botões para ativar/desativar.')
+                .setColor('#c0392b')
+                .setAuthor({ name: 'RETH MORGAN — MÓDULO CHAT', iconURL: botAvatar })
+                .setThumbnail(botAvatar)
+                .setTitle('🛑 FILTROS DE MODERAÇÃO DE CHAT')
+                .setDescription('```\n"Cada mensagem é uma pista. Cada spam, um crime."\n```')
                 .addFields(
-                    {
-                        name: '┌ 🌊 Anti-Flood',
-                        value: `${statusIcon(sc.antiflood)}\n↳ Limite: \`${sc.limiteFlood} msgs / 4s\``,
-                        inline: true
-                    },
-                    {
-                        name: '├ 🔗 Anti-Links',
-                        value: `${statusIcon(sc.antilink)}\n↳ Bloqueia URLs externas`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 📩 Anti-Convites',
-                        value: `${statusIcon(sc.antiinvite)}\n↳ Bloqueia discord.gg`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 🔠 Anti-Caps Lock',
-                        value: `${statusIcon(sc.anticaps)}\n↳ Limite 70% maiúsculas`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 🤬 Anti-Preconceito',
-                        value: `${statusIcon(sc.antipreconceito)}\n↳ Filtro de palavras`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 🙈 Anti-Spoiler',
-                        value: `${statusIcon(sc.antiSpoiler)}\n↳ Máx 3 spoilers`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 😅 Filtro de Emojis',
-                        value: `${statusIcon(sc.filtroEmojis)}\n↳ Máx \`${sc.maxEmojis}\` emojis`,
-                        inline: true
-                    },
-                    {
-                        name: '└ 🔇 Limite de Menções',
-                        value: `${statusIcon(sc.limiteMencoes)}\n↳ Máx por mensagem`,
-                        inline: true
-                    },
+                    { name: '🌊 Anti-Flood',      value: `${on(sc.antiflood)}\nLimite: \`${sc.limiteFlood} msgs/4s\``,    inline: true },
+                    { name: '🔗 Anti-Links',       value: on(sc.antilink),                                                  inline: true },
+                    { name: '📩 Anti-Convites',    value: on(sc.antiinvite),                                                inline: true },
+                    { name: '🔠 Anti-Caps Lock',   value: on(sc.anticaps),                                                  inline: true },
+                    { name: '🤬 Anti-Preconceito', value: on(sc.antipreconceito),                                           inline: true },
+                    { name: '🙈 Anti-Spoiler',     value: on(sc.antiSpoiler),                                               inline: true },
+                    { name: '😅 Filtro Emojis',    value: `${on(sc.filtroEmojis)}\nMáx: \`${sc.maxEmojis}\``,             inline: true },
+                    { name: '📣 Limite Menções',   value: `${on(sc.limiteMencoes)}\nMáx: \`${sc.maxMencoes}\``,           inline: true },
+                    { name: '🤖 Detector Selfbot', value: on(sc.detectorSelfbots),                                         inline: true },
                 )
-                .setFooter({ text: 'RETH MORGAN V8  •  Chat & Filtros' });
+                .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
+                .setTimestamp();
         }
 
-        function gerarEmbedSeguranca(sc) {
+        function embedSeguranca(sc) {
             const listaCargos = sc.cargos_protegidos.length > 0
-                ? sc.cargos_protegidos.map(id => `<@&${id}>`).join(' · ')
+                ? sc.cargos_protegidos.map(id => `<@&${id}>`).join(', ')
                 : '`Nenhum cargo protegido`';
-
             return new EmbedBuilder()
-                .setColor('#e74c3c')
-                .setAuthor({ name: 'RETH MORGAN — SEGURANÇA ANTI-RAID', iconURL: client.user.displayAvatarURL() })
-                .setTitle('☢️ Protocolos de Defesa')
-                .setDescription('> Proteções contra traições internas, raids e invasões externas.')
+                .setColor('#8B0000')
+                .setAuthor({ name: 'RETH MORGAN — MÓDULO SEGURANÇA', iconURL: botAvatar })
+                .setThumbnail(botAvatar)
+                .setTitle('☢️ PROTOCOLOS ANTI-RAID & INVASÃO')
+                .setDescription('```\n"Prepare a sala de instrumentos. Invasores serão tratados."\n```')
                 .addFields(
-                    {
-                        name: '┌ 🤖 Anti-Bot Invasor',
-                        value: `${statusIcon(sc.antibot)}\n↳ Bane bot + executor`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 💣 Anti-Nuke',
-                        value: `${statusIcon(sc.antinuke)}\n↳ 3+ canais deletados`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 🎭 Anti-Fake',
-                        value: `${statusIcon(sc.antifake)}\n↳ Mín. \`${sc.diasFake} dias\` de conta`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 🔰 Anti-Cargos',
-                        value: `${statusIcon(sc.anticargos)}\n↳ Protege cargos VIP`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 🔨 Anti-Mass Ban',
-                        value: `${statusIcon(sc.antiMassBan)}\n↳ Máx \`${sc.maxBans}\` bans/min`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 👢 Anti-Mass Kick',
-                        value: `${statusIcon(sc.antiMassKick)}\n↳ Máx \`${sc.maxKicks}\` kicks/min`,
-                        inline: true
-                    },
-                    {
-                        name: '├ 🤖 Detector Selfbots',
-                        value: `${statusIcon(sc.detectorSelfbots)}\n↳ Padrão suspeito`,
-                        inline: true
-                    },
-                    {
-                        name: '├ ✏️ Auto-Mod Nomes',
-                        value: `${statusIcon(sc.autoModNomes)}\n↳ Nicks inválidos`,
-                        inline: true
-                    },
-                    {
-                        name: '└ ⚠️ Auto-Ban por Warns',
-                        value: `\`${sc.autoPunicaoWarns} warns\` → ban auto`,
-                        inline: true
-                    },
-                    {
-                        name: '🔒 Cargos Protegidos',
-                        value: listaCargos,
-                        inline: false
-                    },
+                    { name: '🤖 Anti-Bot Invasor', value: on(sc.antibot),            inline: true },
+                    { name: '💣 Anti-Nuke',         value: on(sc.antinuke),           inline: true },
+                    { name: '🎭 Anti-Fake',         value: `${on(sc.antifake)}\nMínimo: \`${sc.diasFake}d\``, inline: true },
+                    { name: '🔰 Anti-Cargos',       value: on(sc.anticargos),         inline: true },
+                    { name: '🔨 Anti-Mass Ban',     value: `${on(sc.antiMassBan)}\nLimite: \`${sc.maxBans}\``, inline: true },
+                    { name: '👢 Anti-Mass Kick',    value: `${on(sc.antiMassKick)}\nLimite: \`${sc.maxKicks}\``, inline: true },
+                    { name: '📝 Auto-Mod Nomes',    value: on(sc.autoModNomes),       inline: true },
+                    { name: '\u200b',               value: '\u200b',                  inline: true },
+                    { name: '\u200b',               value: '\u200b',                  inline: true },
+                    { name: '🔒 Cargos Protegidos', value: listaCargos,               inline: false },
                 )
-                .setFooter({ text: 'RETH MORGAN V8  •  Segurança' });
+                .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
+                .setTimestamp();
         }
 
-        function gerarEmbedLogs(sc) {
+        function embedLogs(sc) {
             return new EmbedBuilder()
                 .setColor('#9b59b6')
-                .setAuthor({ name: 'RETH MORGAN — CANAIS DE LOG', iconURL: client.user.displayAvatarURL() })
-                .setTitle('📋 Registros & Auditoria')
-                .setDescription('> Configure onde cada tipo de evento será registrado.')
+                .setAuthor({ name: 'RETH MORGAN — MÓDULO LOGS', iconURL: botAvatar })
+                .setThumbnail(botAvatar)
+                .setTitle('📋 CANAIS DE LOGS & REGISTROS')
+                .setDescription('```\n"Um bom assassino mantém registros. Morgan também."\n```')
                 .addFields(
-                    { name: '🛡️ Segurança',       value: nomeCanal(sc.logs_seguranca),  inline: true },
-                    { name: '👮 Staff',             value: nomeCanal(sc.logs_staff),      inline: true },
-                    { name: '📝 Mensagens',         value: nomeCanal(sc.logs_msg),        inline: true },
-                    { name: '🚪 Entradas/Saídas',   value: nomeCanal(sc.logs_join),       inline: true },
-                    { name: '🔰 Anti-Cargos',       value: nomeCanal(sc.logs_anticargos), inline: true },
-                    { name: '\u200b',               value: '\u200b',                      inline: true },
+                    { name: '🛡️ Segurança',        value: ch(sc.logs_seguranca),    inline: true },
+                    { name: '👮 Staff',             value: ch(sc.logs_staff),        inline: true },
+                    { name: '📝 Mensagens',         value: ch(sc.logs_msg),          inline: true },
+                    { name: '🚪 Entradas/Saídas',   value: ch(sc.logs_join),         inline: true },
+                    { name: '🔰 Anti-Cargos',       value: ch(sc.logs_anticargos),   inline: true },
+                    { name: '🔨 Ban/Unban',         value: ch(sc.logs_ban),          inline: true },
+                    { name: '⏱️ Castigo/Descastigo', value: ch(sc.logs_castigo),     inline: true },
+                    { name: '🔇 Mute/Unmute',       value: ch(sc.logs_mute),         inline: true },
+                    { name: '⚠️ Warns',             value: ch(sc.logs_warn),         inline: true },
                 )
-                .setFooter({ text: 'RETH MORGAN V8  •  Logs & Registros' });
+                .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
+                .setTimestamp();
         }
 
-        function gerarEmbedAutomacao(sc) {
-            const listaBypass = sc.bypass_roles.length > 0
-                ? sc.bypass_roles.map(id => `<@&${id}>`).join(' · ')
-                : '`Nenhum cargo imune`';
+        function embedAutomacao(sc) {
+            const bypass = sc.bypass_roles.length > 0 ? sc.bypass_roles.map(id => `<@&${id}>`).join(', ') : '`Nenhum`';
             return new EmbedBuilder()
-                .setColor('#2ecc71')
-                .setAuthor({ name: 'RETH MORGAN — AUTOMAÇÃO', iconURL: client.user.displayAvatarURL() })
-                .setTitle('⚙️ Configurações Gerais')
-                .setDescription('> Configure as funções automáticas do servidor.')
+                .setColor('#27ae60')
+                .setAuthor({ name: 'RETH MORGAN — MÓDULO AUTOMAÇÃO', iconURL: botAvatar })
+                .setThumbnail(botAvatar)
+                .setTitle('⚙️ AUTOMAÇÃO & CONFIGURAÇÕES GERAIS')
+                .setDescription('```\n"Cada protocolo deve ser executado com precisão."\n```')
                 .addFields(
-                    { name: '🎒 Auto-Role',              value: nomeCargo(sc.autorole),  inline: true },
-                    { name: '👋 Canal Boas-Vindas',      value: nomeCanal(sc.msg_join),  inline: true },
-                    {
-                        name: '🗑️ Limpeza Agendada',
-                        value: `${statusIcon(sc.limpezaAgendada)}\n↳ A cada \`${sc.horasLimpeza}h\``,
-                        inline: true
-                    },
-                    { name: '👑 Cargos Imunes (Bypass)', value: listaBypass, inline: false },
+                    { name: '🎒 Auto-Role',            value: ro(sc.autorole),              inline: true },
+                    { name: '👋 Canal Boas-Vindas',    value: ch(sc.msg_join),              inline: true },
+                    { name: '⚠️ Auto-Ban por Warns',   value: `\`${sc.autoPunicaoWarns} warns\``, inline: true },
+                    { name: '🧹 Limpeza Agendada',     value: `${on(sc.limpezaAgendada)}\nIntervalo: \`${sc.horasLimpeza}h\``, inline: true },
+                    { name: '👑 Whitelist (IDs)',       value: sc.whitelistIds ? `\`${sc.whitelistIds.slice(0,60)}...\`` : '`Não configurada`', inline: false },
+                    { name: '🛡️ Cargos Imunes',        value: bypass, inline: false },
                 )
-                .setFooter({ text: 'RETH MORGAN V8  •  Automação' });
+                .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
+                .setTimestamp();
         }
 
-        function gerarEmbedDiversao(sc) {
+        function embedDiversao(sc) {
             return new EmbedBuilder()
                 .setColor('#e91e8c')
-                .setAuthor({ name: 'RETH MORGAN — DIVERSÃO', iconURL: client.user.displayAvatarURL() })
-                .setTitle('🎮 Sistema de Diversão & Progressão')
-                .setDescription('> Configure o canal de fun e os sistemas de progressão dos membros.')
+                .setAuthor({ name: 'RETH MORGAN — MÓDULO DIVERSÃO', iconURL: botAvatar })
+                .setThumbnail(botAvatar)
+                .setTitle('🎮 SISTEMA DE DIVERSÃO')
+                .setDescription('```\n"Até Morgan precisa de um intervalo."\n```')
                 .addFields(
-                    {
-                        name: '🎯 Canal de Diversão',
-                        value: `${nomeCanal(sc.canal_fun)}\n↳ Comandos fun exclusivos aqui`,
-                        inline: false
-                    },
-                    {
-                        name: '⭐ Sistema de XP',
-                        value: `${statusIcon(sc.xp_ativo)}\n↳ Ranking de atividade`,
-                        inline: true
-                    },
-                    {
-                        name: '💰 Sistema Economy',
-                        value: `${statusIcon(sc.coins_ativo)}\n↳ Moedas & recompensas`,
-                        inline: true
-                    },
+                    { name: '🎯 Canal de Fun',     value: `${ch(sc.canal_fun)}\n↳ Comandos fun restritos aqui`, inline: false },
+                    { name: '⭐ Sistema de XP',    value: on(sc.xp_ativo),    inline: true },
+                    { name: '💰 Economy',          value: on(sc.coins_ativo), inline: true },
                 )
-                .setFooter({ text: 'RETH MORGAN V8  •  Diversão' });
+                .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
+                .setTimestamp();
         }
 
-        function gerarEmbedMorgan(sc) {
+        function embedMorgan(sc) {
             return new EmbedBuilder()
                 .setColor('#5865f2')
-                .setAuthor({ name: 'RETH MORGAN — INTELIGÊNCIA ARTIFICIAL', iconURL: client.user.displayAvatarURL() })
-                .setTitle('🤖 I.A. Morgan · Groq llama-3.3-70b')
-                .setDescription(
-                    '> Configure o comportamento da I.A. Morgan no servidor.\n' +
-                    '> Quando ativada, responde no canal definido e ao ser chamada pelo nome.\n\n' +
-                    '```ansi\n[2;34m[SISTEMA][0m[2;32m Protocolo de IA inicializado.[0m\n```'
-                )
+                .setAuthor({ name: 'RETH MORGAN — MÓDULO I.A.', iconURL: botAvatar })
+                .setThumbnail(botAvatar)
+                .setTitle('🤖 I.A. MORGAN — INTELIGÊNCIA ARTIFICIAL')
+                .setDescription('```\n"Processo, analiso, respondo. Sou Morgan."\n```')
                 .addFields(
-                    {
-                        name: '⚡ Status da I.A.',
-                        value: `${statusIcon(sc.morgan_ativo)}\n↳ Responde ao nome e menções`,
-                        inline: true
-                    },
-                    {
-                        name: '📢 Canal Exclusivo',
-                        value: `${nomeCanal(sc.morgan_canal)}\n↳ Morgan responde tudo aqui`,
-                        inline: true
-                    },
+                    { name: '⚡ Status da I.A.',
+                      value: `${on(sc.morgan_ativo)}\n↳ Responde no canal e quando chamado por nome`, inline: false },
+                    { name: '📢 Canal Exclusivo',
+                      value: `${ch(sc.morgan_canal)}\n↳ I.A. responde todas as msgs aqui`, inline: false },
                 )
-                .setFooter({ text: 'RETH MORGAN V8  •  I.A. Morgan  •  Groq' });
+                .setFooter({ text: `Chamar "Morgan" em qualquer canal também ativa · Shield V8`, iconURL: guildIcon })
+                .setTimestamp();
         }
 
-        // ─── BOTÕES ───────────────────────────────────────────────────────────
+        function embedPunicoes(sc) {
+            return new EmbedBuilder()
+                .setColor('#8B0000')
+                .setAuthor({ name: 'RETH MORGAN — MÓDULO PUNIÇÕES', iconURL: botAvatar })
+                .setThumbnail(botAvatar)
+                .setTitle('🔫 CONFIGURAÇÕES DE PUNIÇÕES')
+                .setDescription('```\n"Cada punição é uma obra de arte. Planejada. Calculada."\n```')
+                .addFields(
+                    { name: '✅ Confirmação de Ban',     value: onB(sc.ban_confirmacao),     inline: true },
+                    { name: '✅ Confirmação de Castigo', value: onB(sc.castigo_confirmacao), inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '🎬 GIF de Ban', value: sc.gif_ban
+                        ? `[Link configurado](${sc.gif_ban})\n\`${sc.gif_ban.slice(0, 60)}...\``
+                        : '`Não configurado`\n↳ Sem GIF no ban', inline: false },
+                )
+                .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
+                .setTimestamp();
+        }
 
-        function gerarBotoesNavegacao() {
+        // ─── BOTÕES ───────────────────────────────────────────────
+
+        function navRow1() {
             return new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('nav_home').setLabel('Início').setEmoji('🏠').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('nav_chat').setLabel('Chat').setEmoji('🛑').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('nav_seguranca').setLabel('Segurança').setEmoji('☢️').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('nav_logs').setLabel('Logs').setEmoji('📋').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('nav_mais').setLabel('Mais ▶').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_home').setLabel('🏠 Início').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('nav_chat').setLabel('🛑 Chat').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_seg').setLabel('☢️ Segurança').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_logs').setLabel('📋 Logs').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_pg2').setLabel('Mais ▶').setStyle(ButtonStyle.Secondary),
+            );
+        }
+        function navRow2() {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('nav_home').setLabel('🏠 Início').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('nav_auto').setLabel('⚙️ Automação').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_fun').setLabel('🎮 Diversão').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_ia').setLabel('🤖 I.A.').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_pun').setLabel('🔫 Punições').setStyle(ButtonStyle.Secondary),
             );
         }
 
-        function gerarBotoesNavegacao2() {
+        function rowChat(sc) {
             return new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('nav_home').setLabel('Início').setEmoji('🏠').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('nav_automacao').setLabel('Automação').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('nav_diversao').setLabel('Diversão').setEmoji('🎮').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('nav_morgan').setLabel('I.A. Morgan').setEmoji('🤖').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('nav_voltar').setLabel('◀ Voltar').setEmoji('🔙').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_flood').setLabel('Flood').setEmoji(sc.antiflood ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_flood_lim').setLabel('Lim.Flood').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_link').setLabel('Links').setEmoji(sc.antilink ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_invite').setLabel('Convites').setEmoji(sc.antiinvite ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_precon').setLabel('Anti-Ódio').setEmoji(sc.antipreconceito ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+            );
+        }
+        function rowChat2(sc) {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('t_caps').setLabel('Caps').setEmoji(sc.anticaps ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_spoiler').setLabel('Spoiler').setEmoji(sc.antiSpoiler ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_emojis').setLabel('Emojis').setEmoji(sc.filtroEmojis ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_mencoes').setLabel('Menções').setEmoji(sc.limiteMencoes ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_selfbot').setLabel('Selfbot').setEmoji(sc.detectorSelfbots ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
             );
         }
 
-        function gerarBotoesChat(sc) {
+        function rowSeg(sc) {
             return new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('toggle_flood').setLabel('Anti-Flood').setEmoji(sc.antiflood ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('set_limite_flood').setLabel('Limite Flood').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_link').setLabel('Anti-Link').setEmoji(sc.antilink ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_invite').setLabel('Anti-Invite').setEmoji(sc.antiinvite ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_precon').setLabel('Anti-Ódio').setEmoji(sc.antipreconceito ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_bot').setLabel('Anti-Bot').setEmoji(sc.antibot ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_nuke').setLabel('Anti-Nuke').setEmoji(sc.antinuke ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_fake').setLabel('Anti-Fake').setEmoji(sc.antifake ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_cargos').setLabel('Anti-Cargos').setEmoji(sc.anticargos ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_nomes').setLabel('Auto-Nomes').setEmoji(sc.autoModNomes ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+            );
+        }
+        function rowSeg2(sc) {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('t_mban').setLabel('Anti-MassBan').setEmoji(sc.antiMassBan ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_mkick').setLabel('Anti-MassKick').setEmoji(sc.antiMassKick ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_prot_cargo').setLabel('Proteger Cargo').setEmoji('🔒').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('set_dias_fake').setLabel('Dias Fake').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
             );
         }
 
-        function gerarBotoesChat2(sc) {
-            return new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('toggle_caps').setLabel('Anti-Caps').setEmoji(sc.anticaps ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_spoiler').setLabel('Anti-Spoiler').setEmoji(sc.antiSpoiler ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_emojis').setLabel('Filtro Emoji').setEmoji(sc.filtroEmojis ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_mencoes').setLabel('Lim. Menções').setEmoji(sc.limiteMencoes ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-            );
-        }
-
-        function gerarBotoesSeguranca(sc) {
-            return new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('toggle_bot').setLabel('Anti-Bot').setEmoji(sc.antibot ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_nuke').setLabel('Anti-Nuke').setEmoji(sc.antinuke ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_cargos').setLabel('Anti-Cargos').setEmoji(sc.anticargos ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_fake').setLabel('Anti-Fake').setEmoji(sc.antifake ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_massban').setLabel('Anti-MassBan').setEmoji(sc.antiMassBan ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-            );
-        }
-
-        function gerarBotoesSeguranca2(sc) {
-            return new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('toggle_masskick').setLabel('Anti-MassKick').setEmoji(sc.antiMassKick ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_selfbot').setLabel('Selfbots').setEmoji(sc.detectorSelfbots ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_automod').setLabel('Auto-Mod Nomes').setEmoji(sc.autoModNomes ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('set_prot_cargo').setLabel('Cargos Prot.').setEmoji('🔒').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('set_dias_fake').setLabel('Config Fake').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
-            );
-        }
-
-        function gerarBotoesLogs() {
+        function rowLogs() {
             return new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('set_log_seg').setLabel('Segurança').setEmoji('🛡️').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('set_log_staff').setLabel('Staff').setEmoji('👮').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('set_log_msg').setLabel('Mensagens').setEmoji('📝').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('set_log_join').setLabel('Entradas').setEmoji('🚪').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('set_log_anticargos').setLabel('Anti-Cargos').setEmoji('🔰').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('set_log_join').setLabel('Join/Leave').setEmoji('🚪').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_log_anticargos').setLabel('Anti-Cargos').setEmoji('🔰').setStyle(ButtonStyle.Secondary),
             );
         }
-
-        function gerarBotoesAutomacao() {
+        function rowLogs2() {
             return new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('set_auto_role').setLabel('Auto-Role').setEmoji('🎒').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('set_boas_vindas').setLabel('Boas-Vindas').setEmoji('👋').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('set_bypass').setLabel('Bypass').setEmoji('👑').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_limpeza').setLabel('Limpeza').setEmoji('🗑️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_log_ban').setLabel('Ban/Unban').setEmoji('🔨').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('set_log_castigo').setLabel('Castigo').setEmoji('⏱️').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('set_log_mute').setLabel('Mute/Unmute').setEmoji('🔇').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('set_log_warn').setLabel('Warns').setEmoji('⚠️').setStyle(ButtonStyle.Secondary),
             );
         }
 
-        function gerarBotoesDiversao(sc) {
+        function rowAuto() {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('set_autorole').setLabel('Auto-Role').setEmoji('🎒').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_bvindas').setLabel('Boas-Vindas').setEmoji('👋').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_bypass').setLabel('Imunes').setEmoji('👑').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_warns_limit').setLabel('Warns p/ Ban').setEmoji('⚠️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_whitelist').setLabel('Whitelist').setEmoji('📋').setStyle(ButtonStyle.Primary),
+            );
+        }
+        function rowAuto2(sc) {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('t_limpeza').setLabel('Limpeza Auto').setEmoji(sc.limpezaAgendada ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_horas_limpeza').setLabel('Horas Limpeza').setEmoji('⏰').setStyle(ButtonStyle.Secondary),
+            );
+        }
+
+        function rowFun(sc) {
             return new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('set_canal_fun').setLabel('Canal Fun').setEmoji('🎯').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('clear_canal_fun').setLabel('Limpar Canal').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('toggle_xp').setLabel('Sistema XP').setEmoji(sc.xp_ativo ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('toggle_coins').setLabel('Economy').setEmoji(sc.coins_ativo ? '🟩' : '🟥').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_xp').setLabel('XP').setEmoji(sc.xp_ativo ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('t_coins').setLabel('Economy').setEmoji(sc.coins_ativo ? '🟢' : '🔴').setStyle(ButtonStyle.Secondary),
             );
         }
 
-        function gerarBotoesMorgan(sc) {
+        function rowIA(sc) {
             return new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setCustomId('toggle_morgan')
-                    .setLabel(sc.morgan_ativo ? 'Desativar I.A.' : 'Ativar I.A.')
-                    .setEmoji(sc.morgan_ativo ? '🟩' : '🟥')
+                    .setCustomId('t_morgan')
+                    .setLabel(sc.morgan_ativo ? '🟢 Desativar I.A.' : '🔴 Ativar I.A.')
                     .setStyle(sc.morgan_ativo ? ButtonStyle.Success : ButtonStyle.Danger),
-                new ButtonBuilder()
-                    .setCustomId('set_canal_morgan')
-                    .setLabel('Definir Canal')
-                    .setEmoji('📢')
-                    .setStyle(ButtonStyle.Primary),
-                new ButtonBuilder()
-                    .setCustomId('clear_canal_morgan')
-                    .setLabel('Limpar Canal')
-                    .setEmoji('🗑️')
-                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('set_canal_morgan').setLabel('Definir Canal').setEmoji('📢').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('clear_canal_morgan').setLabel('Limpar Canal').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
             );
         }
 
-        // ─── Envio inicial ────────────────────────────────────────────────────
+        function rowPun(sc) {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('t_ban_confirm')
+                    .setLabel('Confirm. Ban')
+                    .setEmoji(sc.ban_confirmacao ? '✅' : '❌')
+                    .setStyle(sc.ban_confirmacao ? ButtonStyle.Success : ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId('t_castigo_confirm')
+                    .setLabel('Confirm. Castigo')
+                    .setEmoji(sc.castigo_confirmacao ? '✅' : '❌')
+                    .setStyle(sc.castigo_confirmacao ? ButtonStyle.Success : ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('set_gif_ban').setLabel('GIF de Ban').setEmoji('🎬').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('clear_gif_ban').setLabel('Limpar GIF').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+            );
+        }
 
-        const botoesNavegacao = gerarBotoesNavegacao();
-        const painelMensagem  = await msg.channel.send({
-            embeds: [gerarEmbedHome()],
-            components: [botoesNavegacao],
+        // ─── ENVIO INICIAL ────────────────────────────────────────
+
+        const painelMsg = await msg.channel.send({
+            embeds: [embedHome()],
+            components: [navRow1()],
         });
 
-        // ─── Collector principal ──────────────────────────────────────────────
+        // ─── MAPA DE NAVEGAÇÃO ────────────────────────────────────
 
-        const collector = painelMensagem.createMessageComponentCollector({
+        function navItems(sc) {
+            return {
+                'nav_home': { e: embedHome(),         c: [navRow1()] },
+                'nav_chat': { e: embedChat(sc),       c: [navRow1(), rowChat(sc), rowChat2(sc)] },
+                'nav_seg':  { e: embedSeguranca(sc),  c: [navRow1(), rowSeg(sc), rowSeg2(sc)] },
+                'nav_logs': { e: embedLogs(sc),       c: [navRow1(), rowLogs(), rowLogs2()] },
+                'nav_pg2':  { e: embedHome(),         c: [navRow2()] },
+                'nav_auto': { e: embedAutomacao(sc),  c: [navRow2(), rowAuto(), rowAuto2(sc)] },
+                'nav_fun':  { e: embedDiversao(sc),   c: [navRow2(), rowFun(sc)] },
+                'nav_ia':   { e: embedMorgan(sc),     c: [navRow2(), rowIA(sc)] },
+                'nav_pun':  { e: embedPunicoes(sc),   c: [navRow2(), rowPun(sc)] },
+            };
+        }
+
+        // Mapeamentos de toggle
+        const toggleMap = {
+            't_flood':          'antiflood',
+            't_link':           'antilink',
+            't_invite':         'antiinvite',
+            't_caps':           'anticaps',
+            't_precon':         'antipreconceito',
+            't_spoiler':        'antiSpoiler',
+            't_emojis':         'filtroEmojis',
+            't_mencoes':        'limiteMencoes',
+            't_selfbot':        'detectorSelfbots',
+            't_bot':            'antibot',
+            't_nuke':           'antinuke',
+            't_fake':           'antifake',
+            't_cargos':         'anticargos',
+            't_nomes':          'autoModNomes',
+            't_mban':           'antiMassBan',
+            't_mkick':          'antiMassKick',
+            't_xp':             'xp_ativo',
+            't_coins':          'coins_ativo',
+            't_morgan':         'morgan_ativo',
+            't_ban_confirm':    'ban_confirmacao',
+            't_castigo_confirm':'castigo_confirmacao',
+            't_limpeza':        'limpezaAgendada',
+        };
+
+        // Mapeamentos de input
+        const inputMap = {
+            'set_flood_lim':     { txt: '🌊 Novo limite de flood (2-20 mensagens):', chave: 'limiteFlood',    tipo: 'num' },
+            'set_dias_fake':     { txt: '🎭 Idade mínima da conta em dias (1-60):', chave: 'diasFake',       tipo: 'num' },
+            'set_log_seg':       { txt: '🛡️ Mencione o canal de **Logs de Segurança**:', chave: 'logs_seguranca',  tipo: 'canal' },
+            'set_log_staff':     { txt: '👮 Mencione o canal de **Logs de Staff**:', chave: 'logs_staff',        tipo: 'canal' },
+            'set_log_msg':       { txt: '📝 Mencione o canal de **Logs de Mensagens**:', chave: 'logs_msg',      tipo: 'canal' },
+            'set_log_join':      { txt: '🚪 Mencione o canal de **Join/Leave**:', chave: 'logs_join',            tipo: 'canal' },
+            'set_log_anticargos':{ txt: '🔰 Mencione o canal de **Anti-Cargos**:', chave: 'logs_anticargos',    tipo: 'canal' },
+            'set_log_ban':       { txt: '🔨 Mencione o canal de **Ban/Unban**:', chave: 'logs_ban',              tipo: 'canal' },
+            'set_log_castigo':   { txt: '⏱️ Mencione o canal de **Castigo/Descastigo**:', chave: 'logs_castigo', tipo: 'canal' },
+            'set_log_mute':      { txt: '🔇 Mencione o canal de **Mute/Unmute**:', chave: 'logs_mute',          tipo: 'canal' },
+            'set_log_warn':      { txt: '⚠️ Mencione o canal de **Warns**:', chave: 'logs_warn',                tipo: 'canal' },
+            'set_autorole':      { txt: '🎒 Mencione o **Auto-Role** (cargo automático):', chave: 'autorole',   tipo: 'cargo' },
+            'set_bvindas':       { txt: '👋 Mencione o canal de **Boas-Vindas**:', chave: 'msg_join',           tipo: 'canal' },
+            'set_bypass':        { txt: '👑 Mencione o cargo para **Adicionar/Remover** da imunidade:', chave: 'bypass_roles', tipo: 'bypass' },
+            'set_prot_cargo':    { txt: '🔒 Mencione o cargo para **Proteger/Desproteger**:', chave: 'cargos_protegidos', tipo: 'protecao' },
+            'set_canal_fun':     { txt: '🎮 Mencione o **Canal de Fun**:', chave: 'canal_fun',                  tipo: 'canal' },
+            'set_canal_morgan':  { txt: '🤖 Mencione o canal para a **I.A. Morgan**:', chave: 'morgan_canal',   tipo: 'canal' },
+            'set_gif_ban':       { txt: '🎬 Digite a **URL do GIF** de ban (ex: https://tenor.com/...):', chave: 'gif_ban', tipo: 'texto' },
+            'set_warns_limit':   { txt: '⚠️ Quantos warns antes do auto-ban? (1-10):', chave: 'autoPunicaoWarns', tipo: 'num' },
+            'set_horas_limpeza': { txt: '🧹 A cada quantas horas fazer a limpeza? (1-72):', chave: 'horasLimpeza', tipo: 'num' },
+            'set_whitelist':     { txt: '📋 Digite os IDs separados por vírgula para a whitelist:', chave: 'whitelistIds', tipo: 'texto' },
+        };
+
+        // Clears simples
+        const clearMap = {
+            'clear_canal_fun':   { chave: 'canal_fun',    nav: 'nav_fun' },
+            'clear_canal_morgan':{ chave: 'morgan_canal', nav: 'nav_ia'  },
+            'clear_gif_ban':     { chave: 'gif_ban',      nav: 'nav_pun' },
+        };
+
+        // Qual embed/componente volta após input
+        function voltarEmbedAposInput(customId, sc) {
+            const logIds = ['set_log_seg','set_log_staff','set_log_msg','set_log_join','set_log_anticargos','set_log_ban','set_log_castigo','set_log_mute','set_log_warn'];
+            if (logIds.includes(customId))                                             return { e: embedLogs(sc),      c: [navRow1(), rowLogs(), rowLogs2()] };
+            if (['set_prot_cargo','set_dias_fake'].includes(customId))                 return { e: embedSeguranca(sc), c: [navRow1(), rowSeg(sc), rowSeg2(sc)] };
+            if (['set_autorole','set_bvindas','set_bypass','set_warns_limit','set_whitelist','set_horas_limpeza'].includes(customId))
+                                                                                       return { e: embedAutomacao(sc), c: [navRow2(), rowAuto(), rowAuto2(sc)] };
+            if (customId === 'set_canal_fun')                                          return { e: embedDiversao(sc),  c: [navRow2(), rowFun(sc)] };
+            if (customId === 'set_canal_morgan')                                       return { e: embedMorgan(sc),    c: [navRow2(), rowIA(sc)] };
+            if (['set_gif_ban','t_ban_confirm','t_castigo_confirm'].includes(customId)) return { e: embedPunicoes(sc), c: [navRow2(), rowPun(sc)] };
+            if (customId === 'set_flood_lim')                                          return { e: embedChat(sc),      c: [navRow1(), rowChat(sc), rowChat2(sc)] };
+            return { e: embedHome(), c: [navRow1()] };
+        }
+
+        // ─── COLLECTOR ────────────────────────────────────────────
+
+        const collector = painelMsg.createMessageComponentCollector({
             filter: (i) => i.user.id === msg.author.id,
-            time: 10 * 60 * 1000, // 10 minutos
+            time: 10 * 60 * 1000,
         });
 
         collector.on('collect', async (i) => {
-            const { configs, sc: currentSc } = obterConfigs();
+            const { configs, sc } = obterConfigs();
+            const id = i.customId;
 
-            // ── Navegação ─────────────────────────────────────────────────────
-            const navMap = {
-                'nav_home': {
-                    embeds: [gerarEmbedHome()],
-                    components: [botoesNavegacao]
-                },
-                'nav_chat': {
-                    embeds: [gerarEmbedChat(currentSc)],
-                    components: [botoesNavegacao, gerarBotoesChat(currentSc), gerarBotoesChat2(currentSc)]
-                },
-                'nav_seguranca': {
-                    embeds: [gerarEmbedSeguranca(currentSc)],
-                    components: [botoesNavegacao, gerarBotoesSeguranca(currentSc), gerarBotoesSeguranca2(currentSc)]
-                },
-                'nav_seg_back': {
-                    embeds: [gerarEmbedSeguranca(currentSc)],
-                    components: [botoesNavegacao, gerarBotoesSeguranca(currentSc), gerarBotoesSeguranca2(currentSc)]
-                },
-                'nav_logs': {
-                    embeds: [gerarEmbedLogs(currentSc)],
-                    components: [botoesNavegacao, gerarBotoesLogs()]
-                },
-                'nav_mais': {
-                    embeds: [gerarEmbedHome()],
-                    components: [gerarBotoesNavegacao2()]
-                },
-                'nav_voltar': {
-                    embeds: [gerarEmbedHome()],
-                    components: [botoesNavegacao]
-                },
-                'nav_automacao': {
-                    embeds: [gerarEmbedAutomacao(currentSc)],
-                    components: [gerarBotoesNavegacao2(), gerarBotoesAutomacao()]
-                },
-                'nav_diversao': {
-                    embeds: [gerarEmbedDiversao(currentSc)],
-                    components: [gerarBotoesNavegacao2(), gerarBotoesDiversao(currentSc)]
-                },
-                'nav_morgan': {
-                    embeds: [gerarEmbedMorgan(currentSc)],
-                    components: [gerarBotoesNavegacao2(), gerarBotoesMorgan(currentSc)]
-                },
-            };
-
-            if (navMap[i.customId]) {
-                await i.update(navMap[i.customId]);
+            // ── Navegação ────────────────────────────────────────
+            const nav = navItems(sc);
+            if (nav[id]) {
+                await i.update({ embeds: [nav[id].e], components: nav[id].c });
                 return;
             }
 
-            // ── Toggles ───────────────────────────────────────────────────────
-            const mapeamentoToggle = {
-                'toggle_flood':    { chave: 'antiflood',        grupo: 'chat' },
-                'toggle_link':     { chave: 'antilink',         grupo: 'chat' },
-                'toggle_invite':   { chave: 'antiinvite',       grupo: 'chat' },
-                'toggle_caps':     { chave: 'anticaps',         grupo: 'chat' },
-                'toggle_precon':   { chave: 'antipreconceito',  grupo: 'chat' },
-                'toggle_spoiler':  { chave: 'antiSpoiler',      grupo: 'chat' },
-                'toggle_emojis':   { chave: 'filtroEmojis',     grupo: 'chat' },
-                'toggle_mencoes':  { chave: 'limiteMencoes',    grupo: 'chat' },
-                'toggle_bot':      { chave: 'antibot',          grupo: 'seg'  },
-                'toggle_nuke':     { chave: 'antinuke',         grupo: 'seg'  },
-                'toggle_cargos':   { chave: 'anticargos',       grupo: 'seg'  },
-                'toggle_fake':     { chave: 'antifake',         grupo: 'seg'  },
-                'toggle_massban':  { chave: 'antiMassBan',      grupo: 'seg'  },
-                'toggle_masskick': { chave: 'antiMassKick',     grupo: 'seg'  },
-                'toggle_selfbot':  { chave: 'detectorSelfbots', grupo: 'seg'  },
-                'toggle_automod':  { chave: 'autoModNomes',     grupo: 'seg'  },
-                'toggle_xp':       { chave: 'xp_ativo',        grupo: 'fun'  },
-                'toggle_coins':    { chave: 'coins_ativo',      grupo: 'fun'  },
-                'toggle_limpeza':  { chave: 'limpezaAgendada',  grupo: 'auto' },
-                'toggle_morgan':   { chave: 'morgan_ativo',     grupo: 'morgan' },
-            };
-
-            const togInfo = mapeamentoToggle[i.customId];
-            if (togInfo) {
-                configs[msg.guild.id][togInfo.chave] = !currentSc[togInfo.chave];
+            // ── Clears ───────────────────────────────────────────
+            if (clearMap[id]) {
+                configs[msg.guild.id][clearMap[id].chave] = clearMap[id].chave === 'gif_ban' ? '' : null;
                 salvarConfigs(configs);
                 const { sc: upd } = obterConfigs();
-                if (togInfo.grupo === 'chat') {
-                    await i.update({ embeds: [gerarEmbedChat(upd)], components: [botoesNavegacao, gerarBotoesChat(upd), gerarBotoesChat2(upd)] });
-                } else if (togInfo.grupo === 'seg') {
-                    await i.update({ embeds: [gerarEmbedSeguranca(upd)], components: [botoesNavegacao, gerarBotoesSeguranca(upd), gerarBotoesSeguranca2(upd)] });
-                } else if (togInfo.grupo === 'fun') {
-                    await i.update({ embeds: [gerarEmbedDiversao(upd)], components: [gerarBotoesNavegacao2(), gerarBotoesDiversao(upd)] });
-                } else if (togInfo.grupo === 'auto') {
-                    await i.update({ embeds: [gerarEmbedAutomacao(upd)], components: [gerarBotoesNavegacao2(), gerarBotoesAutomacao()] });
-                } else if (togInfo.grupo === 'morgan') {
-                    await i.update({ embeds: [gerarEmbedMorgan(upd)], components: [gerarBotoesNavegacao2(), gerarBotoesMorgan(upd)] });
-                }
+                const navUpd = navItems(upd);
+                await i.update({ embeds: [navUpd[clearMap[id].nav].e], components: navUpd[clearMap[id].nav].c });
                 return;
             }
 
-            // ── Limpar canais ─────────────────────────────────────────────────
-            if (i.customId === 'clear_canal_fun') {
-                configs[msg.guild.id].canal_fun = null;
+            // ── Toggles ──────────────────────────────────────────
+            if (toggleMap[id]) {
+                configs[msg.guild.id][toggleMap[id]] = !sc[toggleMap[id]];
                 salvarConfigs(configs);
                 const { sc: upd } = obterConfigs();
-                await i.update({ embeds: [gerarEmbedDiversao(upd)], components: [gerarBotoesNavegacao2(), gerarBotoesDiversao(upd)] });
+
+                const chatToggles   = ['t_flood','t_link','t_invite','t_caps','t_precon','t_spoiler','t_emojis','t_mencoes','t_selfbot'];
+                const segToggles    = ['t_bot','t_nuke','t_fake','t_cargos','t_nomes','t_mban','t_mkick'];
+                const funToggles    = ['t_xp','t_coins'];
+
+                if (chatToggles.includes(id))     await i.update({ embeds: [embedChat(upd)],      components: [navRow1(), rowChat(upd), rowChat2(upd)] });
+                else if (segToggles.includes(id)) await i.update({ embeds: [embedSeguranca(upd)], components: [navRow1(), rowSeg(upd), rowSeg2(upd)] });
+                else if (funToggles.includes(id)) await i.update({ embeds: [embedDiversao(upd)],  components: [navRow2(), rowFun(upd)] });
+                else if (id === 't_morgan')       await i.update({ embeds: [embedMorgan(upd)],    components: [navRow2(), rowIA(upd)] });
+                else if (id === 't_ban_confirm' || id === 't_castigo_confirm')
+                    await i.update({ embeds: [embedPunicoes(upd)], components: [navRow2(), rowPun(upd)] });
+                else if (id === 't_limpeza')      await i.update({ embeds: [embedAutomacao(upd)], components: [navRow2(), rowAuto(), rowAuto2(upd)] });
                 return;
             }
 
-            if (i.customId === 'clear_canal_morgan') {
-                configs[msg.guild.id].morgan_canal = null;
-                salvarConfigs(configs);
-                const { sc: upd } = obterConfigs();
-                await i.update({ embeds: [gerarEmbedMorgan(upd)], components: [gerarBotoesNavegacao2(), gerarBotoesMorgan(upd)] });
-                return;
-            }
-
-            // ── Inputs de texto ───────────────────────────────────────────────
-            const inputsDisponiveis = {
-                'set_limite_flood':   { texto: '🌊 Digite o novo limite de flood (**2 a 20**):', chave: 'limiteFlood', tipo: 'numero' },
-                'set_dias_fake':      { texto: '🎭 Idade mínima da conta em dias (**1 a 60**):', chave: 'diasFake',    tipo: 'numero' },
-                'set_log_seg':        { texto: '🛡️ Mencione o canal para **Logs de Segurança**:', chave: 'logs_seguranca',  tipo: 'canal' },
-                'set_log_staff':      { texto: '👮 Mencione o canal para **Logs de Staff**:', chave: 'logs_staff',          tipo: 'canal' },
-                'set_log_msg':        { texto: '📝 Mencione o canal para **Logs de Mensagens**:', chave: 'logs_msg',         tipo: 'canal' },
-                'set_log_join':       { texto: '🚪 Mencione o canal para **Logs de Entradas**:', chave: 'logs_join',         tipo: 'canal' },
-                'set_log_anticargos': { texto: '🔰 Mencione o canal para **Logs Anti-Cargos**:', chave: 'logs_anticargos',   tipo: 'canal' },
-                'set_auto_role':      { texto: '🎒 Mencione o cargo para o **Auto-Role**:', chave: 'autorole',               tipo: 'cargo' },
-                'set_boas_vindas':    { texto: '👋 Mencione o canal para **Boas-Vindas**:', chave: 'msg_join',               tipo: 'canal' },
-                'set_bypass':         { texto: '👑 Mencione o cargo para **Bypass (Imunidade)**:', chave: 'bypass_roles',    tipo: 'bypass' },
-                'set_prot_cargo':     { texto: '🔒 Mencione o cargo para **Adicionar/Remover da Proteção**:', chave: 'cargos_protegidos', tipo: 'protecao' },
-                'set_canal_fun':      { texto: '🎮 Mencione o canal de **Diversão**:', chave: 'canal_fun',                  tipo: 'canal' },
-                'set_canal_morgan':   { texto: '🤖 Mencione o canal para a **I.A. Morgan**:', chave: 'morgan_canal',         tipo: 'canal' },
-            };
-
-            const inputAlvo = inputsDisponiveis[i.customId];
+            // ── Inputs ───────────────────────────────────────────
+            const inputAlvo = inputMap[id];
             if (!inputAlvo) return;
 
             await i.deferUpdate();
-            const avisoChat = await msg.channel.send(
-                `> ⌨️ <@${msg.author.id}> — ${inputAlvo.texto}\n> *Digite \`cancelar\` para abortar. (30s)*`
+            const avisoMsg = await msg.channel.send(
+                `⌨️ <@${msg.author.id}>, ${inputAlvo.txt}\n*Digite \`cancelar\` para abortar. (30s)*`
             );
 
-            const coletorResposta = msg.channel.createMessageCollector({
+            const coletorTxt = msg.channel.createMessageCollector({
                 filter: (m) => m.author.id === msg.author.id,
                 max: 1, time: 30_000,
             });
 
-            coletorResposta.on('collect', async (m) => {
+            coletorTxt.on('collect', async (m) => {
                 await m.delete().catch(() => {});
-                await avisoChat.delete().catch(() => {});
+                await avisoMsg.delete().catch(() => {});
                 if (m.content.toLowerCase() === 'cancelar') return;
 
                 const { configs: dadosUpd } = obterConfigs();
                 const scAlvo = dadosUpd[msg.guild.id];
 
-                if (inputAlvo.tipo === 'numero') {
+                if (inputAlvo.tipo === 'num') {
                     const val = parseInt(m.content);
                     if (!isNaN(val) && val > 0) scAlvo[inputAlvo.chave] = val;
                 } else if (inputAlvo.tipo === 'canal') {
@@ -642,53 +578,30 @@ module.exports = {
                         idx > -1 ? scAlvo.bypass_roles.splice(idx, 1) : scAlvo.bypass_roles.push(r.id);
                     }
                 } else if (inputAlvo.tipo === 'protecao') {
-                    const cargo = m.mentions.roles.first() || msg.guild.roles.cache.get(m.content.trim());
-                    if (cargo) {
-                        const idx = scAlvo.cargos_protegidos.indexOf(cargo.id);
-                        idx > -1 ? scAlvo.cargos_protegidos.splice(idx, 1) : scAlvo.cargos_protegidos.push(cargo.id);
+                    const r = m.mentions.roles.first() || msg.guild.roles.cache.get(m.content.trim());
+                    if (r) {
+                        const idx = scAlvo.cargos_protegidos.indexOf(r.id);
+                        idx > -1 ? scAlvo.cargos_protegidos.splice(idx, 1) : scAlvo.cargos_protegidos.push(r.id);
                     }
+                } else if (inputAlvo.tipo === 'texto') {
+                    scAlvo[inputAlvo.chave] = m.content.trim();
                 }
 
                 salvarConfigs(dadosUpd);
                 const { sc: freshSc } = obterConfigs();
-
-                // Atualizar embed correto após salvar
-                const logIds = ['set_log_seg','set_log_staff','set_log_msg','set_log_join','set_log_anticargos'];
-                if (logIds.includes(i.customId)) {
-                    await painelMensagem.edit({ embeds: [gerarEmbedLogs(freshSc)], components: [botoesNavegacao, gerarBotoesLogs()] });
-                } else if (i.customId === 'set_prot_cargo' || i.customId === 'set_dias_fake') {
-                    await painelMensagem.edit({ embeds: [gerarEmbedSeguranca(freshSc)], components: [botoesNavegacao, gerarBotoesSeguranca(freshSc), gerarBotoesSeguranca2(freshSc)] });
-                } else if (['set_auto_role','set_boas_vindas','set_bypass'].includes(i.customId)) {
-                    await painelMensagem.edit({ embeds: [gerarEmbedAutomacao(freshSc)], components: [gerarBotoesNavegacao2(), gerarBotoesAutomacao()] });
-                } else if (i.customId === 'set_canal_fun') {
-                    await painelMensagem.edit({ embeds: [gerarEmbedDiversao(freshSc)], components: [gerarBotoesNavegacao2(), gerarBotoesDiversao(freshSc)] });
-                } else if (i.customId === 'set_canal_morgan') {
-                    await painelMensagem.edit({ embeds: [gerarEmbedMorgan(freshSc)], components: [gerarBotoesNavegacao2(), gerarBotoesMorgan(freshSc)] });
-                } else if (i.customId === 'set_limite_flood') {
-                    await painelMensagem.edit({ embeds: [gerarEmbedChat(freshSc)], components: [botoesNavegacao, gerarBotoesChat(freshSc), gerarBotoesChat2(freshSc)] });
-                }
+                const vol = voltarEmbedAposInput(id, freshSc);
+                await painelMsg.edit({ embeds: [vol.e], components: vol.c });
             });
 
-            coletorResposta.on('end', async (collected) => {
-                if (collected.size === 0) await avisoChat.delete().catch(() => {});
+            coletorTxt.on('end', async (col) => {
+                if (col.size === 0) await avisoMsg.delete().catch(() => {});
             });
         });
 
         collector.on('end', async () => {
-            try {
-                const nav = gerarBotoesNavegacao();
-                nav.components.forEach(btn => btn.setDisabled(true));
-                await painelMensagem.edit({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor('#2b2d31')
-                            .setTitle('🛡️ Painel Encerrado')
-                            .setDescription('> A sessão expirou. Use `r!painel` para abrir novamente.')
-                            .setFooter({ text: 'RETH MORGAN V8' })
-                    ],
-                    components: [nav]
-                }).catch(() => {});
-            } catch {}
+            const nav = navRow1();
+            nav.components.forEach(b => b.setDisabled(true));
+            await painelMsg.edit({ components: [nav] }).catch(() => {});
         });
-    },
+    }
 };
