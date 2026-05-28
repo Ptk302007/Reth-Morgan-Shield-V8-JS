@@ -1,7 +1,7 @@
 // ============================================================
 //  RETH MORGAN — SHIELD SYSTEM V8
 //  index.js — Servidor + Bot + Painel Web Integrado
-//  ✅ Groq SDK + Fix prompt IA dono
+//  FIX: Anti-Mass Ban/Kick não pune mais o próprio bot
 // ============================================================
 require('dotenv').config();
 const express    = require('express');
@@ -448,47 +448,31 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     } catch (e) { console.error('[anti-cargos]', e.message); }
 });
 
-// ── ANTI-REMOÇÃO DE CASTIGO ──────────────────────────────────
-// Cola esse bloco no index.js logo após o listener do anti-cargos
-// (após o client.on('guildMemberUpdate', ...) do anti-cargos)
-//
-// Lógica:
-//   - Se o timeout foi removido E ainda havia tempo restante no JSON
-//   - E o muteAtivo ainda existe (não foi apagado pelo r!descastigar)
-//   - Então foi remoção não autorizada → reaplica o tempo restante
-// ──────────────────────────────────────────────────────────────
+// ── ANTI-REMOÇÃO DE CASTIGO ──
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
     try {
-        // Só dispara quando o timeout FOI removido (tinha antes, não tem mais)
         const tihaTimeout = !!oldMember.communicationDisabledUntil && oldMember.communicationDisabledUntil > new Date();
         const temAgora    = !!newMember.communicationDisabledUntil && newMember.communicationDisabledUntil > new Date();
         if (!tihaTimeout || temAgora) return;
 
-        // Lê o JSON para ver se ainda existe muteAtivo (remoção não autorizada)
         let dados = {};
         try { dados = JSON.parse(require('fs').readFileSync('./database/punicoes.json', 'utf-8')); } catch { return; }
 
         const muteAtivo = dados[newMember.guild.id]?.[newMember.id]?.muteAtivo;
-        if (!muteAtivo) return; // r!descastigar já limpou — remoção era autorizada
+        if (!muteAtivo) return;
 
-        // Calcula tempo restante
         const tempoRestante = muteAtivo.expiresAt - Date.now();
-        if (tempoRestante <= 0) return; // já expirou naturalmente
+        if (tempoRestante <= 0) return;
 
-        // Reaplica o timeout com o tempo restante
         await newMember.timeout(tempoRestante, 'Reth Morgan: Remoção não autorizada de castigo — reaplicado').catch(() => {});
 
-        // Tenta identificar quem removeu pelo audit log
         let removedor = null;
         try {
-            const { AuditLogEvent } = require('discord.js');
             const logs  = await newMember.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberUpdate });
             const entry = logs.entries.first();
             if (entry && Date.now() - entry.createdTimestamp < 5000) removedor = entry.executor;
         } catch {}
 
-        // Log da tentativa bloqueada
-        const { EmbedBuilder } = require('discord.js');
         const logEmbed = new EmbedBuilder()
             .setColor('#8B0000')
             .setAuthor({ name: 'ANTI-REMOÇÃO DE CASTIGO', iconURL: newMember.guild.members.me.displayAvatarURL() })
@@ -513,7 +497,6 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 
         await enviarLog(newMember.guild, 'logs_castigo', logEmbed);
 
-        // DM para quem tentou remover (se identificado)
         if (removedor) {
             try {
                 await removedor.send({
@@ -542,6 +525,10 @@ client.on('guildBanAdd', async (ban) => {
         const entry = logs.entries.first();
         if (!entry) return;
         const executor = entry.executor;
+
+        // ✅ FIX: ignora ações do próprio bot (r!ban, IA ban, etc)
+        if (executor.id === client.user.id) return;
+
         if (isWhitelisted(sc, executor.id, ban.guild)) return;
 
         const agora = Date.now();
@@ -588,6 +575,10 @@ client.on('guildMemberRemove', async (member) => {
         const entry = logs.entries.first();
         if (!entry || Date.now() - entry.createdTimestamp > 5000) return;
         const executor = entry.executor;
+
+        // ✅ FIX: ignora ações do próprio bot (r!kick, antifake, etc)
+        if (executor.id === client.user.id) return;
+
         if (isWhitelisted(sc, executor.id, guild)) return;
 
         const agora = Date.now();
@@ -1138,7 +1129,6 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
         }
 
         // ── CRIAR COMANDO ──
-        // ✅ FIX: aceita com ou sem colchetes [ ] no marcador
         if ((textoResposta.includes('[CRIAR_COMANDO]') || textoResposta.includes('CRIAR_COMANDO')) && isDono) {
             try {
                 const extrairTag = (tag, texto) => {
@@ -1163,7 +1153,6 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
                     novoComando.category = categoria;
                     client.commands.set(novoComando.name, novoComando);
 
-                    // ── ENVIA CÓDIGO NO PRIVADO DO DONO PARA CONFERÊNCIA ──
                     try {
                         const chunks = [];
                         let cod = codigoJs;
