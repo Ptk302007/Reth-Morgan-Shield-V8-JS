@@ -13,7 +13,7 @@ module.exports = {
     aliases: ['config', 'dashboard', 'setup', 'panel'],
 
     execute: async (msg, args, client, OWNER_ID) => {
-        const OWNER_IDS    = [OWNER_ID, '1272650221402194095'];
+        const OWNER_IDS    = [OWNER_ID, '1507543140800921610'];
         const eDonoSupremo = OWNER_IDS.includes(msg.author.id);
         const eDonoServer  = msg.author.id === msg.guild.ownerId;
 
