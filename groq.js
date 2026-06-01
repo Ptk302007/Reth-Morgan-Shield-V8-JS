@@ -1,20 +1,22 @@
+'use strict';
 // ============================================================
 //  RETH MORGAN — GROQ AI MODULE
 //  groq.js — Integração com a API da Groq (com suporte a visão)
 //  ✅ Múltiplas chaves API com fallback automático
 //  ✅ Retry com backoff exponencial no erro 429
+//  ✅ Modelo 70b para melhor obediência às ordens do dono
+//  FIX: max_tokens aumentado para evitar respostas truncadas
+//  FIX: detecção de truncamento para comandos [CRIAR_COMANDO]
 // ============================================================
 const Groq = require("groq-sdk");
 
 // ── CHAVES DE API ──
-// Adicione quantas quiser. O bot usa a primeira, e se esgotar passa pra próxima.
-// No .env defina: GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEY_3 ...
 const CHAVES_API = [
     process.env.GROQ_API_KEY,
     process.env.GROQ_API_KEY_2,
     process.env.GROQ_API_KEY_3,
     process.env.GROQ_API_KEY_4,
-].filter(Boolean); // remove as que não foram definidas
+].filter(Boolean);
 
 if (CHAVES_API.length === 0) {
     console.error("❌ [Groq] Nenhuma chave de API encontrada! Defina GROQ_API_KEY no .env");
@@ -31,8 +33,14 @@ const estadoChaves = CHAVES_API.map(key => ({
 }));
 
 // ── MODELOS ──
-const MODELO_TEXTO = "llama-3.1-8b-instant";
+const MODELO_TEXTO = "llama-3.3-70b-versatile";
 const MODELO_VISAO = "meta-llama/llama-4-scout-17b-16e-instruct";
+
+// ── LIMITES DE TOKENS ──
+// 2048 truncava respostas longas (ex: [CRIAR_COMANDO] com código JS)
+// 8192 é o máximo seguro para o llama-3.3-70b-versatile na Groq
+const MAX_TOKENS_TEXTO = 8192;
+const MAX_TOKENS_VISAO = 2048; // visão não precisa de tanto
 
 // ── HISTÓRICO DE CONTEXTO ──
 const historicoCanais = new Map();
@@ -85,7 +93,19 @@ async function chamarGroqComFallback(payload) {
 
         try {
             const chatCompletion = await estado.client.chat.completions.create(payload);
-            return chatCompletion.choices[0]?.message?.content || "";
+
+            const escolha    = chatCompletion.choices[0];
+            const conteudo   = escolha?.message?.content || "";
+            const stopReason = escolha?.finish_reason || "";
+
+            // FIX: detecta se a resposta foi cortada pelo limite de tokens
+            if (stopReason === "length") {
+                console.warn(`[Groq] ⚠️ Resposta truncada (finish_reason=length). Considere reduzir o prompt ou aumentar max_tokens.`);
+                // Retorna o que veio + marcador de truncamento para o chamador tratar
+                return conteudo + "\n[RESPOSTA_TRUNCADA]";
+            }
+
+            return conteudo;
 
         } catch (error) {
             const status = error.status || 0;
@@ -114,8 +134,9 @@ async function chamarGroqComFallback(payload) {
 
 async function perguntarParaIA(pergunta, systemInstruction, canalId = null, imagemBase64 = null, mimeType = "image/jpeg") {
     try {
-        const temImagem = !!imagemBase64;
-        const modelo    = temImagem ? MODELO_VISAO : MODELO_TEXTO;
+        const temImagem  = !!imagemBase64;
+        const modelo     = temImagem ? MODELO_VISAO : MODELO_TEXTO;
+        const maxTokens  = temImagem ? MAX_TOKENS_VISAO : MAX_TOKENS_TEXTO;
 
         let mensagensHistorico = [];
         if (canalId && !temImagem) {
@@ -155,11 +176,20 @@ async function perguntarParaIA(pergunta, systemInstruction, canalId = null, imag
             model:       modelo,
             messages,
             temperature: 0.7,
-            max_tokens:  1024,
+            max_tokens:  maxTokens,
         };
 
-        const resposta = await chamarGroqComFallback(payload);
+        let resposta = await chamarGroqComFallback(payload);
 
+        // FIX: se veio truncada, avisa e não salva no histórico (resposta inválida)
+        if (resposta.includes("[RESPOSTA_TRUNCADA]")) {
+            resposta = resposta.replace("[RESPOSTA_TRUNCADA]", "").trim();
+            console.warn("[Groq] Resposta entregue truncada ao chamador.");
+            // Não salva no histórico para não contaminar contexto futuro
+            return resposta;
+        }
+
+        // Salva no histórico só se a resposta foi completa
         if (canalId && resposta) {
             const hist = historicoCanais.get(canalId) || [];
             const conteudoUsuario = temImagem
