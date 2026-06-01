@@ -228,7 +228,7 @@ process.on('uncaughtException', (err) => {
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, PermissionsBitField } = require('discord.js');
 const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
-const PREFIX = 'r!';
+const PREFIX = 'd!';
 
 const OWNER_IDS = ['1507543140800921610']
 const OWNER_ID  = OWNER_IDS[0];
@@ -1018,12 +1018,16 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
         let textoResposta = respostaIA.trim();
 
         // ── LIMPEZA DE MARKDOWN ──
-        const crasesMarkdown = '\`\`\`';
-        if (textoResposta.startsWith(crasesMarkdown)) {
-            textoResposta = textoResposta.slice(3).trim();
-            if (textoResposta.toLowerCase().startsWith('json')) textoResposta = textoResposta.slice(4).trim();
-            if (textoResposta.endsWith(crasesMarkdown)) textoResposta = textoResposta.slice(0, -3).trim();
-        }
+const crasesMarkdown = '\`\`\`';
+if (textoResposta.startsWith(crasesMarkdown)) {
+    textoResposta = textoResposta.slice(3).trim();
+    if (textoResposta.toLowerCase().startsWith('json')) textoResposta = textoResposta.slice(4).trim();
+    if (textoResposta.endsWith(crasesMarkdown)) textoResposta = textoResposta.slice(0, -3).trim();
+}
+
+// ── EXTRAÇÃO DE JSON (mesmo que venha com texto antes) ──
+const jsonMatch = textoResposta.match(/\{[\s\S]*"acao"[\s\S]*\}/);
+if (jsonMatch) textoResposta = jsonMatch[0];
 
         // ── EXECUÇÃO DE ORDENS JSON ──
         if (textoResposta.startsWith('{') && textoResposta.includes('"acao"')) {
