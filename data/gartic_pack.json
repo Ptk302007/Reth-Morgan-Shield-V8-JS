@@ -1,0 +1,885 @@
+[
+  {
+    "id": 1,
+    "imagem": "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400",
+    "respostas": [
+      "cachorro",
+      "cao",
+      "dog"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 2,
+    "imagem": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400",
+    "respostas": [
+      "gato",
+      "felino",
+      "cat"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 3,
+    "imagem": "https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?w=400",
+    "respostas": [
+      "elefante",
+      "elephant"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 4,
+    "imagem": "https://images.unsplash.com/photo-1511381939415-e44015466834?w=400",
+    "respostas": [
+      "chocolate",
+      "fondue"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 5,
+    "imagem": "https://images.unsplash.com/photo-1611143669185-af224c5e3252?w=400",
+    "respostas": [
+      "formiga",
+      "ant",
+      "inseto"
+    ],
+    "nivel": "medio",
+    "categoria": "animais"
+  },
+  {
+    "id": 6,
+    "imagem": "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=400",
+    "respostas": [
+      "cafe",
+      "xicara",
+      "coffee"
+    ],
+    "nivel": "facil",
+    "categoria": "objetos"
+  },
+  {
+    "id": 7,
+    "imagem": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400",
+    "respostas": [
+      "pizza"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 8,
+    "imagem": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=400",
+    "respostas": [
+      "frutas",
+      "fruta",
+      "alimentacao"
+    ],
+    "nivel": "medio",
+    "categoria": "comidas"
+  },
+  {
+    "id": 9,
+    "imagem": "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400",
+    "respostas": [
+      "banana",
+      "bananas"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 10,
+    "imagem": "https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400",
+    "respostas": [
+      "maca",
+      "apple"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 11,
+    "imagem": "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400",
+    "respostas": [
+      "cachorro",
+      "cao",
+      "filhote"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 12,
+    "imagem": "https://images.unsplash.com/photo-1552053831-71594a27632d?w=400",
+    "respostas": [
+      "labrador",
+      "cachorro",
+      "cao"
+    ],
+    "nivel": "medio",
+    "categoria": "animais"
+  },
+  {
+    "id": 13,
+    "imagem": "https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?w=400",
+    "respostas": [
+      "macarrao",
+      "espaguete",
+      "spaghetti",
+      "pasta"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 14,
+    "imagem": "https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=400",
+    "respostas": [
+      "frango",
+      "galinha",
+      "chicken"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 15,
+    "imagem": "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=400",
+    "respostas": [
+      "gato",
+      "felino",
+      "gatinho"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 16,
+    "imagem": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400",
+    "respostas": [
+      "montanha",
+      "neve",
+      "mountain"
+    ],
+    "nivel": "medio",
+    "categoria": "lugares"
+  },
+  {
+    "id": 17,
+    "imagem": "https://images.unsplash.com/photo-1490644658840-3f2e3f8c5625?w=400",
+    "respostas": [
+      "predio",
+      "edificio",
+      "arranha-ceu",
+      "new york"
+    ],
+    "nivel": "medio",
+    "categoria": "lugares"
+  },
+  {
+    "id": 18,
+    "imagem": "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=400",
+    "respostas": [
+      "torre eiffel",
+      "paris",
+      "eiffel"
+    ],
+    "nivel": "facil",
+    "categoria": "lugares"
+  },
+  {
+    "id": 19,
+    "imagem": "https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=400",
+    "respostas": [
+      "coliseu",
+      "roma",
+      "anfiteatro"
+    ],
+    "nivel": "medio",
+    "categoria": "lugares"
+  },
+  {
+    "id": 20,
+    "imagem": "https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=400",
+    "respostas": [
+      "mona lisa",
+      "quadro",
+      "pintura",
+      "leonardo da vinci"
+    ],
+    "nivel": "medio",
+    "categoria": "arte"
+  },
+  {
+    "id": 21,
+    "imagem": "https://images.unsplash.com/photo-1534430480872-3498386e7856?w=400",
+    "respostas": [
+      "cidade",
+      "metropole",
+      "new york",
+      "predios"
+    ],
+    "nivel": "medio",
+    "categoria": "lugares"
+  },
+  {
+    "id": 22,
+    "imagem": "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=400",
+    "respostas": [
+      "arco-iris",
+      "arco iris",
+      "rainbow"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 23,
+    "imagem": "https://images.unsplash.com/photo-1575881875475-31023242e3f9?w=400",
+    "respostas": [
+      "sol",
+      "sun",
+      "estrela"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 24,
+    "imagem": "https://images.unsplash.com/photo-1532767153582-b1a0e5145009?w=400",
+    "respostas": [
+      "lua",
+      "lua cheia",
+      "moon"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 25,
+    "imagem": "https://images.unsplash.com/photo-1548247416-ec66f4900b2e?w=400",
+    "respostas": [
+      "gato",
+      "felino",
+      "gatinho"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 26,
+    "imagem": "https://images.unsplash.com/photo-1601979031925-424e53b6caaa?w=400",
+    "respostas": [
+      "cachorro",
+      "cao",
+      "dog"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 27,
+    "imagem": "https://images.unsplash.com/photo-1605568427561-40dd23c2acea?w=400",
+    "respostas": [
+      "husky",
+      "husky siberiano",
+      "cachorro"
+    ],
+    "nivel": "medio",
+    "categoria": "animais"
+  },
+  {
+    "id": 28,
+    "imagem": "https://images.unsplash.com/photo-1474511320723-9a56873867b5?w=400",
+    "respostas": [
+      "raposa",
+      "fox",
+      "animal"
+    ],
+    "nivel": "medio",
+    "categoria": "animais"
+  },
+  {
+    "id": 29,
+    "imagem": "https://images.unsplash.com/photo-1543852786-1cf6624b9987?w=400",
+    "respostas": [
+      "gato",
+      "felino"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 30,
+    "imagem": "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=400",
+    "respostas": [
+      "golden gate",
+      "ponte",
+      "san francisco"
+    ],
+    "nivel": "medio",
+    "categoria": "lugares"
+  },
+  {
+    "id": 31,
+    "imagem": "https://images.unsplash.com/photo-1539768942893-daf53e448371?w=400",
+    "respostas": [
+      "piramide",
+      "piramides",
+      "egito"
+    ],
+    "nivel": "facil",
+    "categoria": "lugares"
+  },
+  {
+    "id": 32,
+    "imagem": "https://images.unsplash.com/photo-1518791841217-8f162f1912da?w=400",
+    "respostas": [
+      "gato dormindo",
+      "gato",
+      "dormindo"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 33,
+    "imagem": "https://images.unsplash.com/photo-1611329532992-0d900570a9f4?w=400",
+    "respostas": [
+      "dado",
+      "dados",
+      "cubo"
+    ],
+    "nivel": "facil",
+    "categoria": "objetos"
+  },
+  {
+    "id": 34,
+    "imagem": "https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=400",
+    "respostas": [
+      "guitarra",
+      "violao",
+      "instrumento"
+    ],
+    "nivel": "facil",
+    "categoria": "objetos"
+  },
+  {
+    "id": 35,
+    "imagem": "https://images.unsplash.com/photo-1525201548942-d8732f6617a0?w=400",
+    "respostas": [
+      "violao",
+      "guitarra",
+      "instrumento"
+    ],
+    "nivel": "facil",
+    "categoria": "objetos"
+  },
+  {
+    "id": 36,
+    "imagem": "https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?w=400",
+    "respostas": [
+      "piano",
+      "teclado",
+      "instrumento"
+    ],
+    "nivel": "facil",
+    "categoria": "objetos"
+  },
+  {
+    "id": 37,
+    "imagem": "https://images.unsplash.com/photo-1582769923195-3c5c48400f8b?w=400",
+    "respostas": [
+      "sorriso",
+      "feliz",
+      "carinha"
+    ],
+    "nivel": "facil",
+    "categoria": "outros"
+  },
+  {
+    "id": 38,
+    "imagem": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=400",
+    "respostas": [
+      "bola de futebol",
+      "futebol",
+      "bola"
+    ],
+    "nivel": "facil",
+    "categoria": "esportes"
+  },
+  {
+    "id": 39,
+    "imagem": "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=400",
+    "respostas": [
+      "basquete",
+      "basketball",
+      "bola"
+    ],
+    "nivel": "facil",
+    "categoria": "esportes"
+  },
+  {
+    "id": 40,
+    "imagem": "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=400",
+    "respostas": [
+      "campo de futebol",
+      "campo",
+      "estadio",
+      "futebol"
+    ],
+    "nivel": "medio",
+    "categoria": "esportes"
+  },
+  {
+    "id": 41,
+    "imagem": "https://images.unsplash.com/photo-1474487548417-781cb6d646ef?w=400",
+    "respostas": [
+      "trem",
+      "locomotiva",
+      "ferrovia"
+    ],
+    "nivel": "facil",
+    "categoria": "transporte"
+  },
+  {
+    "id": 42,
+    "imagem": "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400",
+    "respostas": [
+      "aviao",
+      "aeronave",
+      "airplane"
+    ],
+    "nivel": "facil",
+    "categoria": "transporte"
+  },
+  {
+    "id": 43,
+    "imagem": "https://images.unsplash.com/photo-1517976487492-5750f3195933?w=400",
+    "respostas": [
+      "foguete",
+      "rocket",
+      "lancamento"
+    ],
+    "nivel": "facil",
+    "categoria": "transporte"
+  },
+  {
+    "id": 44,
+    "imagem": "https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=400",
+    "respostas": [
+      "ponte",
+      "golden gate",
+      "san francisco"
+    ],
+    "nivel": "medio",
+    "categoria": "lugares"
+  },
+  {
+    "id": 45,
+    "imagem": "https://images.unsplash.com/photo-1534787238916-9ba6764efd4f?w=400",
+    "respostas": [
+      "ciclismo",
+      "bicicleta",
+      "corrida de bicicleta"
+    ],
+    "nivel": "medio",
+    "categoria": "esportes"
+  },
+  {
+    "id": 46,
+    "imagem": "https://images.unsplash.com/photo-1531306728370-e2ebd9d7bb99?w=400",
+    "respostas": [
+      "estrela",
+      "ceu",
+      "galaxia"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 47,
+    "imagem": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400",
+    "respostas": [
+      "bolo",
+      "cake",
+      "torta"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 48,
+    "imagem": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400",
+    "respostas": [
+      "pizza",
+      "pizza marguerita"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 49,
+    "imagem": "https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?w=400",
+    "respostas": [
+      "maca",
+      "fruta",
+      "apple"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 50,
+    "imagem": "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=400",
+    "respostas": [
+      "terra",
+      "planeta terra",
+      "earth"
+    ],
+    "nivel": "medio",
+    "categoria": "natureza"
+  },
+  {
+    "id": 51,
+    "imagem": "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400",
+    "respostas": [
+      "programacao",
+      "codigo",
+      "computador"
+    ],
+    "nivel": "dificil",
+    "categoria": "tecnologia"
+  },
+  {
+    "id": 52,
+    "imagem": "https://images.unsplash.com/photo-1555099962-4199c345e5dd?w=400",
+    "respostas": [
+      "programacao",
+      "codigo",
+      "tecnologia"
+    ],
+    "nivel": "dificil",
+    "categoria": "tecnologia"
+  },
+  {
+    "id": 53,
+    "imagem": "https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=400",
+    "respostas": [
+      "frutas",
+      "fruta",
+      "alimentacao"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 54,
+    "imagem": "https://images.unsplash.com/photo-1526336024174-e58f5cdd8e13?w=400",
+    "respostas": [
+      "gato comendo",
+      "gato",
+      "alimentando"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 55,
+    "imagem": "https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=400",
+    "respostas": [
+      "coelho",
+      "rabbit"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 56,
+    "imagem": "https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=400",
+    "respostas": [
+      "ponte",
+      "rio",
+      "cidade"
+    ],
+    "nivel": "medio",
+    "categoria": "lugares"
+  },
+  {
+    "id": 57,
+    "imagem": "https://images.unsplash.com/photo-1448375240586-882707db888b?w=400",
+    "respostas": [
+      "natureza",
+      "floresta",
+      "arvores"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 58,
+    "imagem": "https://images.unsplash.com/photo-1502744688674-c619d1586c9e?w=400",
+    "respostas": [
+      "bicicleta",
+      "ciclismo",
+      "bike"
+    ],
+    "nivel": "facil",
+    "categoria": "esportes"
+  },
+  {
+    "id": 59,
+    "imagem": "https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?w=400",
+    "respostas": [
+      "terra",
+      "globo",
+      "planeta",
+      "mundo"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 60,
+    "imagem": "https://images.unsplash.com/photo-1547514701-42782101795e?w=400",
+    "respostas": [
+      "laranja",
+      "fruta",
+      "orange"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 61,
+    "imagem": "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400",
+    "respostas": [
+      "morango",
+      "strawberry",
+      "fruta"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 62,
+    "imagem": "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=400",
+    "respostas": [
+      "por do sol",
+      "ceu",
+      "natureza",
+      "entardecer"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 63,
+    "imagem": "https://images.unsplash.com/photo-1560807707-8cc77767d783?w=400",
+    "respostas": [
+      "cachorro",
+      "cao",
+      "filhote"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 64,
+    "imagem": "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=400",
+    "respostas": [
+      "praia",
+      "oceano",
+      "mar",
+      "ferias"
+    ],
+    "nivel": "facil",
+    "categoria": "lugares"
+  },
+  {
+    "id": 65,
+    "imagem": "https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?w=400",
+    "respostas": [
+      "espaco",
+      "galaxia",
+      "universo",
+      "cosmos"
+    ],
+    "nivel": "medio",
+    "categoria": "natureza"
+  },
+  {
+    "id": 66,
+    "imagem": "https://images.unsplash.com/photo-1490750967868-88df5691cc27?w=400",
+    "respostas": [
+      "flor",
+      "flores",
+      "natureza"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 67,
+    "imagem": "https://images.unsplash.com/photo-1533743983669-94fa5c4338ec?w=400",
+    "respostas": [
+      "gato",
+      "ragdoll",
+      "gatinho",
+      "filhote"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 68,
+    "imagem": "https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=400",
+    "respostas": [
+      "pato",
+      "ave",
+      "bird"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 69,
+    "imagem": "https://images.unsplash.com/photo-1597848212624-a19eb35e2651?w=400",
+    "respostas": [
+      "girassol",
+      "flor",
+      "sunflower"
+    ],
+    "nivel": "facil",
+    "categoria": "natureza"
+  },
+  {
+    "id": 70,
+    "imagem": "https://images.unsplash.com/photo-1561948955-570b270e7c36?w=400",
+    "respostas": [
+      "gato",
+      "felino",
+      "gatinho"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 71,
+    "imagem": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400",
+    "respostas": [
+      "bicicleta",
+      "bike",
+      "bicycle"
+    ],
+    "nivel": "facil",
+    "categoria": "transporte"
+  },
+  {
+    "id": 72,
+    "imagem": "https://images.unsplash.com/photo-1551183053-bf91798d832f?w=400",
+    "respostas": [
+      "macarrao",
+      "espaguete",
+      "bolonhesa",
+      "pasta"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 73,
+    "imagem": "https://images.unsplash.com/photo-1444464666168-49d633b86797?w=400",
+    "respostas": [
+      "passaro",
+      "bird",
+      "aguia",
+      "ave"
+    ],
+    "nivel": "medio",
+    "categoria": "animais"
+  },
+  {
+    "id": 74,
+    "imagem": "https://images.unsplash.com/photo-1604908177453-7462950a6a3b?w=400",
+    "respostas": [
+      "frango assado",
+      "frango",
+      "galinha assada"
+    ],
+    "nivel": "facil",
+    "categoria": "comidas"
+  },
+  {
+    "id": 75,
+    "imagem": "https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=400",
+    "respostas": [
+      "cavalo",
+      "cavalos",
+      "horse"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 76,
+    "imagem": "https://images.unsplash.com/photo-1561731216-c3a4d99437d5?w=400",
+    "respostas": [
+      "tigre",
+      "felino",
+      "tiger"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 77,
+    "imagem": "https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=400",
+    "respostas": [
+      "leao",
+      "felino",
+      "lion"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 78,
+    "imagem": "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=400",
+    "respostas": [
+      "macaco",
+      "primata",
+      "monkey"
+    ],
+    "nivel": "medio",
+    "categoria": "animais"
+  },
+  {
+    "id": 79,
+    "imagem": "https://images.unsplash.com/photo-1564731657573-272eca3e1c9b?w=400",
+    "respostas": [
+      "tubarao",
+      "shark",
+      "peixe"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  },
+  {
+    "id": 80,
+    "imagem": "https://images.unsplash.com/photo-1595433562696-a6c0f5a5cd77?w=400",
+    "respostas": [
+      "gato",
+      "gatinho",
+      "filhote"
+    ],
+    "nivel": "facil",
+    "categoria": "animais"
+  }
+]
