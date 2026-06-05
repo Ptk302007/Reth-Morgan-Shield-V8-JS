@@ -1,6 +1,7 @@
 'use strict';
 // ============================================================
-//  RETH MORGAN — BAN COMMAND (CORRIGIDO)
+//  RETH MORGAN — BAN COMMAND (CORRIGIDO V2)
+//  ✅ Respeita ban_confirmacao do painel
 //  ✅ Reaction collector funcionando
 //  ✅ Log enviando corretamente
 //  ✅ DM ao banido
@@ -32,7 +33,6 @@ function registrarInfracao(guildId, userId, tipo, motivo) {
 
 async function enviarLog(guild, sc, embed, gifUrl) {
     try {
-        // Tenta todos os canais de log em ordem de prioridade
         const canalId = sc.logs_ban || sc.logs_staff || sc.logs_seguranca;
         if (!canalId) return;
         const canal = guild.channels.cache.get(canalId);
@@ -116,53 +116,13 @@ module.exports = {
 
         const motivo = args.slice(1).join(' ') || 'Nenhum motivo fornecido.';
         const sc     = getConfig(message.guild.id);
+        const gifUrl = sc.gif_ban || null;
 
-        // ── Embed de confirmação ──────────────────────────────────
-        const embedConfirm = new EmbedBuilder()
-            .setColor('#8B0000')
-            .setAuthor({
-                name: `RETH MORGAN — PROTOCOLO DE BAN`,
-                iconURL: client.user.displayAvatarURL()
-            })
-            .setThumbnail(alvo.user.displayAvatarURL({ dynamic: true, size: 256 }))
-            .setTitle('🔨 CONFIRMAÇÃO DE BANIMENTO')
-            .addFields(
-                { name: '👤 ALVO',    value: `<@${alvo.id}>\n\`${alvo.user.tag}\`\nID: \`${alvo.id}\``, inline: true },
-                { name: '🔫 EXECUTOR', value: `<@${message.author.id}>\n\`${message.author.tag}\``, inline: true },
-                { name: '📋 MOTIVO',  value: `\`\`\`${motivo}\`\`\``, inline: false },
-                { name: '⚠️ INSTRUÇÕES', value: 'Reaja com ✅ para **confirmar**\nReaja com ❌ para **cancelar**\n\n*Aguardando por 30 segundos...*', inline: false }
-            )
-            .setFooter({ text: `Servidor: ${message.guild.name}`, iconURL: message.guild.iconURL() || undefined })
-            .setTimestamp();
-
-        const msgConfirm = await message.channel.send({ embeds: [embedConfirm] });
-
-        // ── Adiciona reações ──────────────────────────────────────
-        await msgConfirm.react('✅').catch(() => {});
-        await msgConfirm.react('❌').catch(() => {});
-
-        // ── Collector de reações ──────────────────────────────────
-        const filter = (reaction, user) =>
-            ['✅', '❌'].includes(reaction.emoji.name) && user.id === message.author.id;
-
-        const collector = msgConfirm.createReactionCollector({ filter, time: 30_000, max: 1 });
-
-        // ── Confirmado ────────────────────────────────────────────
-        collector.on('collect', async (reaction) => {
-            await msgConfirm.reactions.removeAll().catch(() => {});
-
-            if (reaction.emoji.name === '❌') {
-                return msgConfirm.edit({
-                    embeds: [new EmbedBuilder()
-                        .setColor('#2c2c2c')
-                        .setTitle('🚫 BANIMENTO CANCELADO')
-                        .setDescription(`O banimento de **${alvo.user.tag}** foi abortado.`)
-                        .setTimestamp()
-                    ]
-                });
-            }
-
-            // ── DM ao banido ──────────────────────────────────────
+        // ─────────────────────────────────────────────────────────
+        // Função que executa o ban de fato
+        // ─────────────────────────────────────────────────────────
+        async function executarBan(msgParaEditar) {
+            // DM ao banido
             try {
                 await alvo.send({
                     embeds: [new EmbedBuilder()
@@ -181,23 +141,22 @@ module.exports = {
                 });
             } catch {}
 
-            // ── Executa o ban ─────────────────────────────────────
+            // Executa o ban
             try {
                 await alvo.ban({ reason: `[${message.author.tag}] ${motivo}`, deleteMessageDays: 1 });
                 registrarInfracao(message.guild.id, alvo.id, 'bans', motivo);
             } catch (err) {
-                return msgConfirm.edit({
-                    embeds: [new EmbedBuilder()
-                        .setColor('#e74c3c')
-                        .setTitle('❌ ERRO AO BANIR')
-                        .setDescription(`Não foi possível banir ${alvo.user.tag}.\n\`\`\`${err.message}\`\`\``)
-                        .setTimestamp()
-                    ]
-                });
+                const embedErro = new EmbedBuilder()
+                    .setColor('#e74c3c')
+                    .setTitle('❌ ERRO AO BANIR')
+                    .setDescription(`Não foi possível banir ${alvo.user.tag}.\n\`\`\`${err.message}\`\`\``)
+                    .setTimestamp();
+                if (msgParaEditar) await msgParaEditar.edit({ embeds: [embedErro] }).catch(() => {});
+                else await message.channel.send({ embeds: [embedErro] }).catch(() => {});
+                return;
             }
 
-            // ── Embed de resultado ────────────────────────────────
-            const gifUrl = sc.gif_ban || null;
+            // Embed de resultado
             const embedResultado = new EmbedBuilder()
                 .setColor('#8B0000')
                 .setAuthor({
@@ -208,18 +167,20 @@ module.exports = {
                 .setTitle('🔨 BANIMENTO EXECUTADO COM SUCESSO')
                 .setDescription('> *"A ordem foi restaurada. O caos, eliminado."*\n> — Reth Morgan')
                 .addFields(
-                    { name: '👤 BANIDO',   value: `<@${alvo.id}>\n\`${alvo.user.tag}\`\nID: \`${alvo.id}\``, inline: true },
-                    { name: '🔫 EXECUTOR', value: `<@${message.author.id}>\n\`${message.author.tag}\``, inline: true },
-                    { name: '📋 MOTIVO',   value: `\`\`\`${motivo}\`\`\``, inline: false },
+                    { name: '👤 BANIDO',      value: `<@${alvo.id}>\n\`${alvo.user.tag}\`\nID: \`${alvo.id}\``, inline: true },
+                    { name: '🔫 EXECUTOR',    value: `<@${message.author.id}>\n\`${message.author.tag}\``, inline: true },
+                    { name: '📋 MOTIVO',      value: `\`\`\`${motivo}\`\`\``, inline: false },
                     { name: '📅 DATA & HORA', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
                 )
                 .setFooter({ text: `${message.guild.name} · Shield System V8`, iconURL: message.guild.iconURL() || undefined })
                 .setTimestamp();
 
-            await msgConfirm.edit({ embeds: [embedResultado] });
+            if (msgParaEditar) await msgParaEditar.edit({ embeds: [embedResultado] }).catch(() => {});
+            else await message.channel.send({ embeds: [embedResultado] }).catch(() => {});
+
             if (gifUrl) await message.channel.send({ content: gifUrl }).catch(() => {});
 
-            // ── Log ───────────────────────────────────────────────
+            // Log
             const logEmbed = new EmbedBuilder()
                 .setColor('#8B0000')
                 .setAuthor({ name: `BAN EXECUTADO`, iconURL: message.author.displayAvatarURL() })
@@ -235,9 +196,62 @@ module.exports = {
                 .setTimestamp();
 
             await enviarLog(message.guild, sc, logEmbed, gifUrl);
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // Confirmação desativada → executa direto
+        // ─────────────────────────────────────────────────────────
+        if (sc.ban_confirmacao === false) {
+            await executarBan(null);
+            return;
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // Confirmação ativada → embed + reactions
+        // ─────────────────────────────────────────────────────────
+        const embedConfirm = new EmbedBuilder()
+            .setColor('#8B0000')
+            .setAuthor({
+                name: `RETH MORGAN — PROTOCOLO DE BAN`,
+                iconURL: client.user.displayAvatarURL()
+            })
+            .setThumbnail(alvo.user.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setTitle('🔨 CONFIRMAÇÃO DE BANIMENTO')
+            .addFields(
+                { name: '👤 ALVO',       value: `<@${alvo.id}>\n\`${alvo.user.tag}\`\nID: \`${alvo.id}\``, inline: true },
+                { name: '🔫 EXECUTOR',   value: `<@${message.author.id}>\n\`${message.author.tag}\``, inline: true },
+                { name: '📋 MOTIVO',     value: `\`\`\`${motivo}\`\`\``, inline: false },
+                { name: '⚠️ INSTRUÇÕES', value: 'Reaja com ✅ para **confirmar**\nReaja com ❌ para **cancelar**\n\n*Aguardando por 30 segundos...*', inline: false }
+            )
+            .setFooter({ text: `Servidor: ${message.guild.name}`, iconURL: message.guild.iconURL() || undefined })
+            .setTimestamp();
+
+        const msgConfirm = await message.channel.send({ embeds: [embedConfirm] });
+        await msgConfirm.react('✅').catch(() => {});
+        await msgConfirm.react('❌').catch(() => {});
+
+        const filter = (reaction, user) =>
+            ['✅', '❌'].includes(reaction.emoji.name) && user.id === message.author.id;
+
+        const collector = msgConfirm.createReactionCollector({ filter, time: 30_000, max: 1 });
+
+        collector.on('collect', async (reaction) => {
+            await msgConfirm.reactions.removeAll().catch(() => {});
+
+            if (reaction.emoji.name === '❌') {
+                return msgConfirm.edit({
+                    embeds: [new EmbedBuilder()
+                        .setColor('#2c2c2c')
+                        .setTitle('🚫 BANIMENTO CANCELADO')
+                        .setDescription(`O banimento de **${alvo.user.tag}** foi abortado.`)
+                        .setTimestamp()
+                    ]
+                });
+            }
+
+            await executarBan(msgConfirm);
         });
 
-        // ── Timeout ───────────────────────────────────────────────
         collector.on('end', async (collected) => {
             if (collected.size === 0) {
                 await msgConfirm.reactions.removeAll().catch(() => {});
