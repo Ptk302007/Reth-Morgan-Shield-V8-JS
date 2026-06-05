@@ -1,8 +1,9 @@
 'use strict';
 // ============================================================
-//  RETH MORGAN — PAINEL V9 (REMASTER)
+//  RETH MORGAN — PAINEL V9 (REMASTER + BLACKLIST)
 //  Tema: Dexter Morgan | Foto executor/bot | Todos os logs
 //  GIF de ban configurável | Confirmações configuráveis
+//  BLACKLIST: embed + log canal integrado
 // ============================================================
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs   = require('fs');
@@ -58,7 +59,7 @@ module.exports = {
                 logs_msg: null, logs_join: null,
                 logs_anticargos: null,
                 logs_ban: null, logs_castigo: null, logs_mute: null,
-                logs_warn: null,
+                logs_warn: null, logs_blacklist: null,
                 // Automação
                 autorole: null, msg_join: null, bypass_roles: [],
                 whitelistIds: '',
@@ -79,19 +80,35 @@ module.exports = {
             if (!Array.isArray(sc.cargos_protegidos)) sc.cargos_protegidos = [];
             return { configs, sc };
         }
+
         function salvarConfigs(dados) {
             fs.writeFileSync('./database/config.json', JSON.stringify(dados, null, 2));
         }
 
+        function lerBlacklistTotal() {
+            try {
+                const raw = fs.readFileSync('./database/blacklist.json', 'utf-8');
+                const p   = JSON.parse(raw);
+                if (Array.isArray(p)) return { total: p.length, recente: null };
+                const keys   = Object.keys(p);
+                const total  = keys.length;
+                if (total === 0) return { total: 0, recente: null };
+                const sorted = Object.entries(p).sort((a, b) =>
+                    new Date(b[1].addedAt || 0) - new Date(a[1].addedAt || 0)
+                );
+                return { total, recente: sorted[0][1].tag || sorted[0][0] };
+            } catch { return { total: 0, recente: null }; }
+        }
+
         // ─── Helpers de display ───────────────────────────────────
 
-        const on  = (v) => v ? '🟢 `ATIVO`'    : '🔴 `INATIVO`';
-        const onB = (v) => v ? '✅ `ATIVO`'     : '❌ `DESATIVADO`';
-        const ch  = (id) => id ? `<#${id}>`       : '`Não definido`';
-        const ro  = (id) => id ? `<@&${id}>`      : '`Não definido`';
+        const on  = (v) => v ? '🟢 `ATIVO`'  : '🔴 `INATIVO`';
+        const onB = (v) => v ? '✅ `ATIVO`'   : '❌ `DESATIVADO`';
+        const ch  = (id) => id ? `<#${id}>`    : '`Não definido`';
+        const ro  = (id) => id ? `<@&${id}>`   : '`Não definido`';
 
-        const botAvatar = client.user.displayAvatarURL({ size: 256 });
-        const guildIcon = msg.guild.iconURL({ size: 256 }) || botAvatar;
+        const botAvatar  = client.user.displayAvatarURL({ size: 256 });
+        const guildIcon  = msg.guild.iconURL({ size: 256 }) || botAvatar;
         const execAvatar = msg.author.displayAvatarURL({ dynamic: true, size: 256 });
 
         // ─── EMBEDS ───────────────────────────────────────────────
@@ -114,12 +131,13 @@ module.exports = {
                     '⚙️ **Automação** — Auto-role, boas-vindas, warns\n' +
                     '🎮 **Diversão** — Canal fun, XP e economy\n' +
                     '🤖 **I.A. Morgan** — IA e canal exclusivo\n' +
-                    '🔫 **Punições** — GIF ban, confirmações, whitelist'
+                    '🔫 **Punições** — GIF ban, confirmações, whitelist\n' +
+                    '🩸 **Blacklist** — Lista negra global do bot'
                 )
                 .addFields(
                     { name: '👤 Operador', value: `<@${msg.author.id}>\n\`${msg.author.tag}\``, inline: true },
-                    { name: '📅 Sessão',   value: `<t:${Math.floor(Date.now()/1000)}:R>`, inline: true },
-                    { name: '🤖 Bot',      value: `\`${client.user.tag}\``, inline: true }
+                    { name: '📅 Sessão',   value: `<t:${Math.floor(Date.now()/1000)}:R>`,        inline: true },
+                    { name: '🤖 Bot',      value: `\`${client.user.tag}\``,                      inline: true }
                 )
                 .setImage(msg.guild.bannerURL({ size: 1024 }) || null)
                 .setFooter({ text: `Shield System V8 · Aberto por ${msg.author.tag}`, iconURL: execAvatar })
@@ -134,15 +152,15 @@ module.exports = {
                 .setTitle('🛑 FILTROS DE MODERAÇÃO DE CHAT')
                 .setDescription('```\n"Cada mensagem é uma pista. Cada spam, um crime."\n```')
                 .addFields(
-                    { name: '🌊 Anti-Flood',      value: `${on(sc.antiflood)}\nLimite: \`${sc.limiteFlood} msgs/4s\``,    inline: true },
-                    { name: '🔗 Anti-Links',       value: on(sc.antilink),                                                  inline: true },
-                    { name: '📩 Anti-Convites',    value: on(sc.antiinvite),                                                inline: true },
-                    { name: '🔠 Anti-Caps Lock',   value: on(sc.anticaps),                                                  inline: true },
-                    { name: '🤬 Anti-Preconceito', value: on(sc.antipreconceito),                                           inline: true },
-                    { name: '🙈 Anti-Spoiler',     value: on(sc.antiSpoiler),                                               inline: true },
-                    { name: '😅 Filtro Emojis',    value: `${on(sc.filtroEmojis)}\nMáx: \`${sc.maxEmojis}\``,             inline: true },
-                    { name: '📣 Limite Menções',   value: `${on(sc.limiteMencoes)}\nMáx: \`${sc.maxMencoes}\``,           inline: true },
-                    { name: '🤖 Detector Selfbot', value: on(sc.detectorSelfbots),                                         inline: true },
+                    { name: '🌊 Anti-Flood',      value: `${on(sc.antiflood)}\nLimite: \`${sc.limiteFlood} msgs/4s\``, inline: true },
+                    { name: '🔗 Anti-Links',       value: on(sc.antilink),                                               inline: true },
+                    { name: '📩 Anti-Convites',    value: on(sc.antiinvite),                                             inline: true },
+                    { name: '🔠 Anti-Caps Lock',   value: on(sc.anticaps),                                               inline: true },
+                    { name: '🤬 Anti-Preconceito', value: on(sc.antipreconceito),                                        inline: true },
+                    { name: '🙈 Anti-Spoiler',     value: on(sc.antiSpoiler),                                            inline: true },
+                    { name: '😅 Filtro Emojis',    value: `${on(sc.filtroEmojis)}\nMáx: \`${sc.maxEmojis}\``,          inline: true },
+                    { name: '📣 Limite Menções',   value: `${on(sc.limiteMencoes)}\nMáx: \`${sc.maxMencoes}\``,        inline: true },
+                    { name: '🤖 Detector Selfbot', value: on(sc.detectorSelfbots),                                      inline: true },
                 )
                 .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
                 .setTimestamp();
@@ -182,15 +200,16 @@ module.exports = {
                 .setTitle('📋 CANAIS DE LOGS & REGISTROS')
                 .setDescription('```\n"Um bom assassino mantém registros. Morgan também."\n```')
                 .addFields(
-                    { name: '🛡️ Segurança',        value: ch(sc.logs_seguranca),    inline: true },
-                    { name: '👮 Staff',             value: ch(sc.logs_staff),        inline: true },
-                    { name: '📝 Mensagens',         value: ch(sc.logs_msg),          inline: true },
-                    { name: '🚪 Entradas/Saídas',   value: ch(sc.logs_join),         inline: true },
-                    { name: '🔰 Anti-Cargos',       value: ch(sc.logs_anticargos),   inline: true },
-                    { name: '🔨 Ban/Unban',         value: ch(sc.logs_ban),          inline: true },
-                    { name: '⏱️ Castigo/Descastigo', value: ch(sc.logs_castigo),     inline: true },
-                    { name: '🔇 Mute/Unmute',       value: ch(sc.logs_mute),         inline: true },
-                    { name: '⚠️ Warns',             value: ch(sc.logs_warn),         inline: true },
+                    { name: '🛡️ Segurança',         value: ch(sc.logs_seguranca),  inline: true },
+                    { name: '👮 Staff',              value: ch(sc.logs_staff),      inline: true },
+                    { name: '📝 Mensagens',          value: ch(sc.logs_msg),        inline: true },
+                    { name: '🚪 Entradas/Saídas',    value: ch(sc.logs_join),       inline: true },
+                    { name: '🔰 Anti-Cargos',        value: ch(sc.logs_anticargos), inline: true },
+                    { name: '🔨 Ban/Unban',          value: ch(sc.logs_ban),        inline: true },
+                    { name: '⏱️ Castigo/Descastigo', value: ch(sc.logs_castigo),    inline: true },
+                    { name: '🔇 Mute/Unmute',        value: ch(sc.logs_mute),       inline: true },
+                    { name: '⚠️ Warns',              value: ch(sc.logs_warn),       inline: true },
+                    { name: '🩸 Blacklist',          value: ch(sc.logs_blacklist),  inline: true },
                 )
                 .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
                 .setTimestamp();
@@ -205,12 +224,12 @@ module.exports = {
                 .setTitle('⚙️ AUTOMAÇÃO & CONFIGURAÇÕES GERAIS')
                 .setDescription('```\n"Cada protocolo deve ser executado com precisão."\n```')
                 .addFields(
-                    { name: '🎒 Auto-Role',            value: ro(sc.autorole),              inline: true },
-                    { name: '👋 Canal Boas-Vindas',    value: ch(sc.msg_join),              inline: true },
-                    { name: '⚠️ Auto-Ban por Warns',   value: `\`${sc.autoPunicaoWarns} warns\``, inline: true },
-                    { name: '🧹 Limpeza Agendada',     value: `${on(sc.limpezaAgendada)}\nIntervalo: \`${sc.horasLimpeza}h\``, inline: true },
-                    { name: '👑 Whitelist (IDs)',       value: sc.whitelistIds ? `\`${sc.whitelistIds.slice(0,60)}...\`` : '`Não configurada`', inline: false },
-                    { name: '🛡️ Cargos Imunes',        value: bypass, inline: false },
+                    { name: '🎒 Auto-Role',          value: ro(sc.autorole),              inline: true },
+                    { name: '👋 Canal Boas-Vindas',  value: ch(sc.msg_join),              inline: true },
+                    { name: '⚠️ Auto-Ban por Warns', value: `\`${sc.autoPunicaoWarns} warns\``, inline: true },
+                    { name: '🧹 Limpeza Agendada',   value: `${on(sc.limpezaAgendada)}\nIntervalo: \`${sc.horasLimpeza}h\``, inline: true },
+                    { name: '👑 Whitelist (IDs)',     value: sc.whitelistIds ? `\`${sc.whitelistIds.slice(0,60)}...\`` : '`Não configurada`', inline: false },
+                    { name: '🛡️ Cargos Imunes',      value: bypass, inline: false },
                 )
                 .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
                 .setTimestamp();
@@ -224,9 +243,9 @@ module.exports = {
                 .setTitle('🎮 SISTEMA DE DIVERSÃO')
                 .setDescription('```\n"Até Morgan precisa de um intervalo."\n```')
                 .addFields(
-                    { name: '🎯 Canal de Fun',     value: `${ch(sc.canal_fun)}\n↳ Comandos fun restritos aqui`, inline: false },
-                    { name: '⭐ Sistema de XP',    value: on(sc.xp_ativo),    inline: true },
-                    { name: '💰 Economy',          value: on(sc.coins_ativo), inline: true },
+                    { name: '🎯 Canal de Fun',  value: `${ch(sc.canal_fun)}\n↳ Comandos fun restritos aqui`, inline: false },
+                    { name: '⭐ Sistema de XP', value: on(sc.xp_ativo),    inline: true },
+                    { name: '💰 Economy',       value: on(sc.coins_ativo), inline: true },
                 )
                 .setFooter({ text: `Shield System V8 · ${msg.guild.name}`, iconURL: guildIcon })
                 .setTimestamp();
@@ -268,6 +287,36 @@ module.exports = {
                 .setTimestamp();
         }
 
+        function embedBlacklist(sc) {
+            const { total, recente } = lerBlacklistTotal();
+            const ehDono = OWNER_IDS.includes(msg.author.id);
+            return new EmbedBuilder()
+                .setColor('#8B0000')
+                .setAuthor({ name: 'RETH MORGAN — BLACKLIST GLOBAL', iconURL: botAvatar })
+                .setThumbnail(botAvatar)
+                .setTitle('🩸 LISTA NEGRA — CONTROLE GLOBAL DE ACESSO')
+                .setDescription(
+                    '```\n"Uma lista de alvos. Cada nome aqui é uma sentença."\n```\n' +
+                    'Usuários na blacklist são **bloqueados de usar qualquer comando** do bot em qualquer servidor.\n\n' +
+                    (ehDono ? '👑 **Você tem acesso completo ao sistema.**' : '⚠️ **Visualização apenas. Gerenciamento exclusivo dos donos do bot.**')
+                )
+                .addFields(
+                    { name: '📊 Total banidos',   value: `\`${total}\` usuário${total !== 1 ? 's' : ''}`, inline: true },
+                    { name: '🕐 Último inscrito', value: recente ? `\`${recente}\`` : '`Nenhum`',          inline: true },
+                    { name: '📋 Canal de Logs',   value: ch(sc.logs_blacklist),                            inline: true },
+                    { name: '⚙️ Comandos (donos do bot apenas)',
+                      value:
+                        '`r!bl add @user [motivo]` — Inscrever\n' +
+                        '`r!bl remove @user` — Liberar\n' +
+                        '`r!bl list` — Listar todos\n' +
+                        '`r!bl info @user` — Ver ficha completa\n' +
+                        '`r!bl wipe` — Apagar tudo',
+                      inline: false },
+                )
+                .setFooter({ text: `Shield System V8 · Acesso restrito — Donos do Bot`, iconURL: guildIcon })
+                .setTimestamp();
+        }
+
         // ─── BOTÕES ───────────────────────────────────────────────
 
         function navRow1() {
@@ -285,7 +334,14 @@ module.exports = {
                 new ButtonBuilder().setCustomId('nav_auto').setLabel('⚙️ Automação').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('nav_fun').setLabel('🎮 Diversão').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('nav_ia').setLabel('🤖 I.A.').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_pg3').setLabel('Mais ▶').setStyle(ButtonStyle.Secondary),
+            );
+        }
+        function navRow3() {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('nav_home').setLabel('🏠 Início').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId('nav_pun').setLabel('🔫 Punições').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('nav_bl').setLabel('🩸 Blacklist').setStyle(ButtonStyle.Danger),
             );
         }
 
@@ -341,6 +397,7 @@ module.exports = {
                 new ButtonBuilder().setCustomId('set_log_castigo').setLabel('Castigo').setEmoji('⏱️').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('set_log_mute').setLabel('Mute/Unmute').setEmoji('🔇').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('set_log_warn').setLabel('Warns').setEmoji('⚠️').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('set_log_blacklist').setLabel('Blacklist').setEmoji('🩸').setStyle(ButtonStyle.Danger),
             );
         }
 
@@ -397,6 +454,24 @@ module.exports = {
             );
         }
 
+        function rowBlacklist(sc) {
+            const ehDono = OWNER_IDS.includes(msg.author.id);
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('set_log_blacklist')
+                    .setLabel('Definir Canal Log BL')
+                    .setEmoji('📋')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(!ehDono),
+                new ButtonBuilder()
+                    .setCustomId('clear_log_blacklist')
+                    .setLabel('Limpar Log BL')
+                    .setEmoji('🗑️')
+                    .setStyle(ButtonStyle.Danger)
+                    .setDisabled(!ehDono),
+            );
+        }
+
         // ─── ENVIO INICIAL ────────────────────────────────────────
 
         const painelMsg = await msg.channel.send({
@@ -416,79 +491,80 @@ module.exports = {
                 'nav_auto': { e: embedAutomacao(sc),  c: [navRow2(), rowAuto(), rowAuto2(sc)] },
                 'nav_fun':  { e: embedDiversao(sc),   c: [navRow2(), rowFun(sc)] },
                 'nav_ia':   { e: embedMorgan(sc),     c: [navRow2(), rowIA(sc)] },
-                'nav_pun':  { e: embedPunicoes(sc),   c: [navRow2(), rowPun(sc)] },
+                'nav_pg3':  { e: embedHome(),         c: [navRow3()] },
+                'nav_pun':  { e: embedPunicoes(sc),   c: [navRow3(), rowPun(sc)] },
+                'nav_bl':   { e: embedBlacklist(sc),  c: [navRow3(), rowBlacklist(sc)] },
             };
         }
 
-        // Mapeamentos de toggle
         const toggleMap = {
-            't_flood':          'antiflood',
-            't_link':           'antilink',
-            't_invite':         'antiinvite',
-            't_caps':           'anticaps',
-            't_precon':         'antipreconceito',
-            't_spoiler':        'antiSpoiler',
-            't_emojis':         'filtroEmojis',
-            't_mencoes':        'limiteMencoes',
-            't_selfbot':        'detectorSelfbots',
-            't_bot':            'antibot',
-            't_nuke':           'antinuke',
-            't_fake':           'antifake',
-            't_cargos':         'anticargos',
-            't_nomes':          'autoModNomes',
-            't_mban':           'antiMassBan',
-            't_mkick':          'antiMassKick',
-            't_xp':             'xp_ativo',
-            't_coins':          'coins_ativo',
-            't_morgan':         'morgan_ativo',
-            't_ban_confirm':    'ban_confirmacao',
-            't_castigo_confirm':'castigo_confirmacao',
-            't_limpeza':        'limpezaAgendada',
+            't_flood':           'antiflood',
+            't_link':            'antilink',
+            't_invite':          'antiinvite',
+            't_caps':            'anticaps',
+            't_precon':          'antipreconceito',
+            't_spoiler':         'antiSpoiler',
+            't_emojis':          'filtroEmojis',
+            't_mencoes':         'limiteMencoes',
+            't_selfbot':         'detectorSelfbots',
+            't_bot':             'antibot',
+            't_nuke':            'antinuke',
+            't_fake':            'antifake',
+            't_cargos':          'anticargos',
+            't_nomes':           'autoModNomes',
+            't_mban':            'antiMassBan',
+            't_mkick':           'antiMassKick',
+            't_xp':              'xp_ativo',
+            't_coins':           'coins_ativo',
+            't_morgan':          'morgan_ativo',
+            't_ban_confirm':     'ban_confirmacao',
+            't_castigo_confirm': 'castigo_confirmacao',
+            't_limpeza':         'limpezaAgendada',
         };
 
-        // Mapeamentos de input
         const inputMap = {
-            'set_flood_lim':     { txt: '🌊 Novo limite de flood (2-20 mensagens):', chave: 'limiteFlood',    tipo: 'num' },
-            'set_dias_fake':     { txt: '🎭 Idade mínima da conta em dias (1-60):', chave: 'diasFake',       tipo: 'num' },
-            'set_log_seg':       { txt: '🛡️ Mencione o canal de **Logs de Segurança**:', chave: 'logs_seguranca',  tipo: 'canal' },
-            'set_log_staff':     { txt: '👮 Mencione o canal de **Logs de Staff**:', chave: 'logs_staff',        tipo: 'canal' },
-            'set_log_msg':       { txt: '📝 Mencione o canal de **Logs de Mensagens**:', chave: 'logs_msg',      tipo: 'canal' },
-            'set_log_join':      { txt: '🚪 Mencione o canal de **Join/Leave**:', chave: 'logs_join',            tipo: 'canal' },
-            'set_log_anticargos':{ txt: '🔰 Mencione o canal de **Anti-Cargos**:', chave: 'logs_anticargos',    tipo: 'canal' },
-            'set_log_ban':       { txt: '🔨 Mencione o canal de **Ban/Unban**:', chave: 'logs_ban',              tipo: 'canal' },
-            'set_log_castigo':   { txt: '⏱️ Mencione o canal de **Castigo/Descastigo**:', chave: 'logs_castigo', tipo: 'canal' },
-            'set_log_mute':      { txt: '🔇 Mencione o canal de **Mute/Unmute**:', chave: 'logs_mute',          tipo: 'canal' },
-            'set_log_warn':      { txt: '⚠️ Mencione o canal de **Warns**:', chave: 'logs_warn',                tipo: 'canal' },
-            'set_autorole':      { txt: '🎒 Mencione o **Auto-Role** (cargo automático):', chave: 'autorole',   tipo: 'cargo' },
-            'set_bvindas':       { txt: '👋 Mencione o canal de **Boas-Vindas**:', chave: 'msg_join',           tipo: 'canal' },
-            'set_bypass':        { txt: '👑 Mencione o cargo para **Adicionar/Remover** da imunidade:', chave: 'bypass_roles', tipo: 'bypass' },
-            'set_prot_cargo':    { txt: '🔒 Mencione o cargo para **Proteger/Desproteger**:', chave: 'cargos_protegidos', tipo: 'protecao' },
-            'set_canal_fun':     { txt: '🎮 Mencione o **Canal de Fun**:', chave: 'canal_fun',                  tipo: 'canal' },
-            'set_canal_morgan':  { txt: '🤖 Mencione o canal para a **I.A. Morgan**:', chave: 'morgan_canal',   tipo: 'canal' },
-            'set_gif_ban':       { txt: '🎬 Digite a **URL do GIF** de ban (ex: https://tenor.com/...):', chave: 'gif_ban', tipo: 'texto' },
-            'set_warns_limit':   { txt: '⚠️ Quantos warns antes do auto-ban? (1-10):', chave: 'autoPunicaoWarns', tipo: 'num' },
-            'set_horas_limpeza': { txt: '🧹 A cada quantas horas fazer a limpeza? (1-72):', chave: 'horasLimpeza', tipo: 'num' },
-            'set_whitelist':     { txt: '📋 Digite os IDs separados por vírgula para a whitelist:', chave: 'whitelistIds', tipo: 'texto' },
+            'set_flood_lim':      { txt: '🌊 Novo limite de flood (2-20 mensagens):', chave: 'limiteFlood',    tipo: 'num' },
+            'set_dias_fake':      { txt: '🎭 Idade mínima da conta em dias (1-60):', chave: 'diasFake',        tipo: 'num' },
+            'set_log_seg':        { txt: '🛡️ Mencione o canal de **Logs de Segurança**:', chave: 'logs_seguranca',    tipo: 'canal' },
+            'set_log_staff':      { txt: '👮 Mencione o canal de **Logs de Staff**:', chave: 'logs_staff',            tipo: 'canal' },
+            'set_log_msg':        { txt: '📝 Mencione o canal de **Logs de Mensagens**:', chave: 'logs_msg',          tipo: 'canal' },
+            'set_log_join':       { txt: '🚪 Mencione o canal de **Join/Leave**:', chave: 'logs_join',                tipo: 'canal' },
+            'set_log_anticargos': { txt: '🔰 Mencione o canal de **Anti-Cargos**:', chave: 'logs_anticargos',        tipo: 'canal' },
+            'set_log_ban':        { txt: '🔨 Mencione o canal de **Ban/Unban**:', chave: 'logs_ban',                  tipo: 'canal' },
+            'set_log_castigo':    { txt: '⏱️ Mencione o canal de **Castigo/Descastigo**:', chave: 'logs_castigo',    tipo: 'canal' },
+            'set_log_mute':       { txt: '🔇 Mencione o canal de **Mute/Unmute**:', chave: 'logs_mute',              tipo: 'canal' },
+            'set_log_warn':       { txt: '⚠️ Mencione o canal de **Warns**:', chave: 'logs_warn',                    tipo: 'canal' },
+            'set_log_blacklist':  { txt: '🩸 Mencione o canal de **Logs da Blacklist**:', chave: 'logs_blacklist',    tipo: 'canal' },
+            'set_autorole':       { txt: '🎒 Mencione o **Auto-Role** (cargo automático):', chave: 'autorole',        tipo: 'cargo' },
+            'set_bvindas':        { txt: '👋 Mencione o canal de **Boas-Vindas**:', chave: 'msg_join',                tipo: 'canal' },
+            'set_bypass':         { txt: '👑 Mencione o cargo para **Adicionar/Remover** da imunidade:', chave: 'bypass_roles',      tipo: 'bypass' },
+            'set_prot_cargo':     { txt: '🔒 Mencione o cargo para **Proteger/Desproteger**:', chave: 'cargos_protegidos',           tipo: 'protecao' },
+            'set_canal_fun':      { txt: '🎮 Mencione o **Canal de Fun**:', chave: 'canal_fun',                       tipo: 'canal' },
+            'set_canal_morgan':   { txt: '🤖 Mencione o canal para a **I.A. Morgan**:', chave: 'morgan_canal',        tipo: 'canal' },
+            'set_gif_ban':        { txt: '🎬 Digite a **URL do GIF** de ban (ex: https://tenor.com/...):', chave: 'gif_ban',         tipo: 'texto' },
+            'set_warns_limit':    { txt: '⚠️ Quantos warns antes do auto-ban? (1-10):', chave: 'autoPunicaoWarns',   tipo: 'num' },
+            'set_horas_limpeza':  { txt: '🧹 A cada quantas horas fazer a limpeza? (1-72):', chave: 'horasLimpeza',  tipo: 'num' },
+            'set_whitelist':      { txt: '📋 Digite os IDs separados por vírgula para a whitelist:', chave: 'whitelistIds', tipo: 'texto' },
         };
 
-        // Clears simples
         const clearMap = {
-            'clear_canal_fun':   { chave: 'canal_fun',    nav: 'nav_fun' },
-            'clear_canal_morgan':{ chave: 'morgan_canal', nav: 'nav_ia'  },
-            'clear_gif_ban':     { chave: 'gif_ban',      nav: 'nav_pun' },
+            'clear_canal_fun':    { chave: 'canal_fun',      nav: 'nav_fun' },
+            'clear_canal_morgan': { chave: 'morgan_canal',   nav: 'nav_ia'  },
+            'clear_gif_ban':      { chave: 'gif_ban',        nav: 'nav_pun' },
+            'clear_log_blacklist':{ chave: 'logs_blacklist', nav: 'nav_bl'  },
         };
 
-        // Qual embed/componente volta após input
         function voltarEmbedAposInput(customId, sc) {
             const logIds = ['set_log_seg','set_log_staff','set_log_msg','set_log_join','set_log_anticargos','set_log_ban','set_log_castigo','set_log_mute','set_log_warn'];
-            if (logIds.includes(customId))                                             return { e: embedLogs(sc),      c: [navRow1(), rowLogs(), rowLogs2()] };
-            if (['set_prot_cargo','set_dias_fake'].includes(customId))                 return { e: embedSeguranca(sc), c: [navRow1(), rowSeg(sc), rowSeg2(sc)] };
+            if (customId === 'set_log_blacklist')                                               return { e: embedBlacklist(sc),  c: [navRow3(), rowBlacklist(sc)] };
+            if (logIds.includes(customId))                                                      return { e: embedLogs(sc),       c: [navRow1(), rowLogs(), rowLogs2()] };
+            if (['set_prot_cargo','set_dias_fake'].includes(customId))                          return { e: embedSeguranca(sc),  c: [navRow1(), rowSeg(sc), rowSeg2(sc)] };
             if (['set_autorole','set_bvindas','set_bypass','set_warns_limit','set_whitelist','set_horas_limpeza'].includes(customId))
-                                                                                       return { e: embedAutomacao(sc), c: [navRow2(), rowAuto(), rowAuto2(sc)] };
-            if (customId === 'set_canal_fun')                                          return { e: embedDiversao(sc),  c: [navRow2(), rowFun(sc)] };
-            if (customId === 'set_canal_morgan')                                       return { e: embedMorgan(sc),    c: [navRow2(), rowIA(sc)] };
-            if (['set_gif_ban','t_ban_confirm','t_castigo_confirm'].includes(customId)) return { e: embedPunicoes(sc), c: [navRow2(), rowPun(sc)] };
-            if (customId === 'set_flood_lim')                                          return { e: embedChat(sc),      c: [navRow1(), rowChat(sc), rowChat2(sc)] };
+                                                                                                return { e: embedAutomacao(sc),  c: [navRow2(), rowAuto(), rowAuto2(sc)] };
+            if (customId === 'set_canal_fun')                                                   return { e: embedDiversao(sc),   c: [navRow2(), rowFun(sc)] };
+            if (customId === 'set_canal_morgan')                                                return { e: embedMorgan(sc),     c: [navRow2(), rowIA(sc)] };
+            if (['set_gif_ban','t_ban_confirm','t_castigo_confirm'].includes(customId))         return { e: embedPunicoes(sc),   c: [navRow3(), rowPun(sc)] };
+            if (customId === 'set_flood_lim')                                                   return { e: embedChat(sc),       c: [navRow1(), rowChat(sc), rowChat2(sc)] };
             return { e: embedHome(), c: [navRow1()] };
         }
 
@@ -503,14 +579,12 @@ module.exports = {
             const { configs, sc } = obterConfigs();
             const id = i.customId;
 
-            // ── Navegação ────────────────────────────────────────
             const nav = navItems(sc);
             if (nav[id]) {
                 await i.update({ embeds: [nav[id].e], components: nav[id].c });
                 return;
             }
 
-            // ── Clears ───────────────────────────────────────────
             if (clearMap[id]) {
                 configs[msg.guild.id][clearMap[id].chave] = clearMap[id].chave === 'gif_ban' ? '' : null;
                 salvarConfigs(configs);
@@ -520,29 +594,33 @@ module.exports = {
                 return;
             }
 
-            // ── Toggles ──────────────────────────────────────────
             if (toggleMap[id]) {
                 configs[msg.guild.id][toggleMap[id]] = !sc[toggleMap[id]];
                 salvarConfigs(configs);
                 const { sc: upd } = obterConfigs();
 
-                const chatToggles   = ['t_flood','t_link','t_invite','t_caps','t_precon','t_spoiler','t_emojis','t_mencoes','t_selfbot'];
-                const segToggles    = ['t_bot','t_nuke','t_fake','t_cargos','t_nomes','t_mban','t_mkick'];
-                const funToggles    = ['t_xp','t_coins'];
+                const chatToggles = ['t_flood','t_link','t_invite','t_caps','t_precon','t_spoiler','t_emojis','t_mencoes','t_selfbot'];
+                const segToggles  = ['t_bot','t_nuke','t_fake','t_cargos','t_nomes','t_mban','t_mkick'];
+                const funToggles  = ['t_xp','t_coins'];
 
                 if (chatToggles.includes(id))     await i.update({ embeds: [embedChat(upd)],      components: [navRow1(), rowChat(upd), rowChat2(upd)] });
                 else if (segToggles.includes(id)) await i.update({ embeds: [embedSeguranca(upd)], components: [navRow1(), rowSeg(upd), rowSeg2(upd)] });
                 else if (funToggles.includes(id)) await i.update({ embeds: [embedDiversao(upd)],  components: [navRow2(), rowFun(upd)] });
                 else if (id === 't_morgan')       await i.update({ embeds: [embedMorgan(upd)],    components: [navRow2(), rowIA(upd)] });
                 else if (id === 't_ban_confirm' || id === 't_castigo_confirm')
-                    await i.update({ embeds: [embedPunicoes(upd)], components: [navRow2(), rowPun(upd)] });
+                    await i.update({ embeds: [embedPunicoes(upd)], components: [navRow3(), rowPun(upd)] });
                 else if (id === 't_limpeza')      await i.update({ embeds: [embedAutomacao(upd)], components: [navRow2(), rowAuto(), rowAuto2(upd)] });
                 return;
             }
 
-            // ── Inputs ───────────────────────────────────────────
             const inputAlvo = inputMap[id];
             if (!inputAlvo) return;
+
+            // Trava: set_log_blacklist só para donos do bot
+            if (id === 'set_log_blacklist' && !OWNER_IDS.includes(msg.author.id)) {
+                await i.reply({ content: '🩸 Apenas donos do bot podem configurar o canal de logs da Blacklist.', ephemeral: true });
+                return;
+            }
 
             await i.deferUpdate();
             const avisoMsg = await msg.channel.send(
