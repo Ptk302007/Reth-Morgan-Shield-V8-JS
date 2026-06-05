@@ -226,7 +226,7 @@ process.on('uncaughtException', (err) => {
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, PermissionsBitField } = require('discord.js');
 const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
-const PREFIX = 'd!';
+const PREFIX = 'r!';
 
 const OWNER_IDS = ['1507543140800921610'];
 const OWNER_ID  = OWNER_IDS[0];
