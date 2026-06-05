@@ -1,7 +1,7 @@
 // ============================================================
 //  RETH MORGAN — SHIELD SYSTEM V8
 //  index.js — Servidor + Bot + Painel Web Integrado
-//  FIX: Anti-Mass Ban/Kick não pune mais o próprio bot
+//  FIX: guildMemberUpdate unificado, anti-remoção com flag
 // ============================================================
 require('dotenv').config();
 const express    = require('express');
@@ -120,11 +120,9 @@ app.get('/api/config/:guildId', requireLogin, (req, res) => {
 
 app.post('/api/chat', requireLogin, async (req, res) => {
     const { mensagem, historico, sistema, imagemBase64, mimeType } = req.body;
-
     if (!mensagem && !imagemBase64) {
         return res.status(400).json({ error: 'Mensagem ou imagem obrigatória.' });
     }
-
     try {
         const sessionId = `web_${req.session.user.id}`;
         const resposta  = await perguntarParaIA(
@@ -228,9 +226,9 @@ process.on('uncaughtException', (err) => {
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, AuditLogEvent, PermissionsBitField } = require('discord.js');
 const { perguntarParaIA, limparHistoricoCanal } = require("./groq.js");
 
-const PREFIX = 'r!';
+const PREFIX = 'd!';
 
-const OWNER_IDS = ['1507543140800921610']
+const OWNER_IDS = ['1507543140800921610'];
 const OWNER_ID  = OWNER_IDS[0];
 
 function ehDono(userId) {
@@ -256,6 +254,13 @@ const massBanMap       = new Map();
 const massKickMap      = new Map();
 const selfbotMap       = new Map();
 
+// ── Flag: IDs que tiveram castigo removido de forma autorizada
+//    (evita que o evento reaplique depois do r!descastigo)
+const remocaoAutorizadaSet = new Set();
+
+// Exporta a flag para uso no descastigo.js
+global._remocaoAutorizadaSet = remocaoAutorizadaSet;
+
 // ── LOADER DE COMANDOS ──
 const commandsPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(commandsPath);
@@ -266,7 +271,7 @@ for (const folder of commandFolders) {
     for (const file of commandFiles) {
         const filePath = path.join(folderPath, file);
         try {
-            const command  = require(filePath);
+            const command = require(filePath);
             if ('name' in command && 'execute' in command) {
                 command.category = folder.toLowerCase();
                 client.commands.set(command.name, command);
@@ -406,72 +411,130 @@ client.once('ready', () => {
     }, 15000);
 });
 
-// ── ANTI-CARGOS ──
+// ============================================================
+//  guildMemberUpdate — UNIFICADO
+//  Trata anti-cargos E anti-remoção de castigo no mesmo evento
+//  para evitar conflitos e duplo disparo
+// ============================================================
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    const sc = getConfig(newMember.guild.id);
+
+    // ── BLOCO 1: ANTI-CARGOS ─────────────────────────────────
     try {
-        const sc = getConfig(newMember.guild.id);
-        if (!sc.anticargos) return;
-        if (!sc.cargos_protegidos || sc.cargos_protegidos.length === 0) return;
+        if (sc.anticargos && sc.cargos_protegidos?.length > 0) {
+            const cargoAdicionado = newMember.roles.cache.find(
+                r => sc.cargos_protegidos.includes(r.id) && !oldMember.roles.cache.has(r.id)
+            );
+            if (cargoAdicionado) {
+                let executor = null;
+                try {
+                    const logs = await newMember.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberRoleUpdate });
+                    const entry = logs.entries.first();
+                    if (entry && Date.now() - entry.createdTimestamp < 5000) executor = entry.executor;
+                } catch {}
 
-        const cargoAdicionado = newMember.roles.cache.find(
-            r => sc.cargos_protegidos.includes(r.id) && !oldMember.roles.cache.has(r.id)
-        );
-        if (!cargoAdicionado) return;
+                if (!isWhitelisted(sc, executor?.id, newMember.guild)) {
+                    await newMember.roles.remove(cargoAdicionado, 'Reth Morgan Anti-Cargos').catch(() => {});
 
-        let executor = null;
-        try {
-            const logs = await newMember.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberRoleUpdate });
-            const entry = logs.entries.first();
-            if (entry && Date.now() - entry.createdTimestamp < 5000) executor = entry.executor;
-        } catch {}
+                    const logEmbed = new EmbedBuilder()
+                        .setColor('#f39c12').setTitle('🔰 ANTI-CARGOS — TENTATIVA BLOQUEADA')
+                        .setDescription('Uma tentativa de atribuir um cargo protegido foi interceptada e revertida.')
+                        .addFields(
+                            { name: '🎯 Cargo Bloqueado', value: `<@&${cargoAdicionado.id}> (\`${cargoAdicionado.name}\`)`, inline: true },
+                            { name: '👤 Alvo da Ação',    value: `<@${newMember.id}> (\`${newMember.user.tag}\`)`, inline: true },
+                            { name: '🕵️ Executor',        value: executor ? `<@${executor.id}> (\`${executor.tag}\`)` : '`Não identificado`', inline: true }
+                        ).setTimestamp();
 
-        if (isWhitelisted(sc, executor?.id, newMember.guild)) return;
-        await newMember.roles.remove(cargoAdicionado, 'Reth Morgan Anti-Cargos').catch(() => {});
-
-        const logEmbed = new EmbedBuilder()
-            .setColor('#f39c12').setTitle('🔰 ANTI-CARGOS — TENTATIVA BLOQUEADA')
-            .setDescription('Uma tentativa de atribuir um cargo protegido foi interceptada e revertida.')
-            .addFields(
-                { name: '🎯 Cargo Bloqueado', value: `<@&${cargoAdicionado.id}> (\`${cargoAdicionado.name}\`)`, inline: true },
-                { name: '👤 Alvo da Ação',    value: `<@${newMember.id}> (\`${newMember.user.tag}\`)`, inline: true },
-                { name: '🕵️ Executor',        value: executor ? `<@${executor.id}> (\`${executor.tag}\`)` : '`Não identificado`', inline: true }
-            ).setTimestamp();
-
-        const enviarParaCanal = async (canalId) => {
-            if (!canalId) return;
-            const canal = newMember.guild.channels.cache.get(canalId);
-            if (canal && canal.permissionsFor(newMember.guild.members.me)?.has('SendMessages'))
-                await canal.send({ embeds: [logEmbed] }).catch(() => {});
-        };
-        await enviarParaCanal(sc.logs_anticargos);
-        if (sc.logs_anticargos !== sc.logs_seguranca) await enviarParaCanal(sc.logs_seguranca);
+                    const enviarParaCanal = async (canalId) => {
+                        if (!canalId) return;
+                        const canal = newMember.guild.channels.cache.get(canalId);
+                        if (canal && canal.permissionsFor(newMember.guild.members.me)?.has('SendMessages'))
+                            await canal.send({ embeds: [logEmbed] }).catch(() => {});
+                    };
+                    await enviarParaCanal(sc.logs_anticargos);
+                    if (sc.logs_anticargos !== sc.logs_seguranca) await enviarParaCanal(sc.logs_seguranca);
+                }
+            }
+        }
     } catch (e) { console.error('[anti-cargos]', e.message); }
-});
 
-// ── ANTI-REMOÇÃO DE CASTIGO ──
-client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    // ── BLOCO 2: ANTI-REMOÇÃO DE CASTIGO ─────────────────────
     try {
         const tihaTimeout = !!oldMember.communicationDisabledUntil && oldMember.communicationDisabledUntil > new Date();
         const temAgora    = !!newMember.communicationDisabledUntil && newMember.communicationDisabledUntil > new Date();
+
+        // Só age se o castigo foi REMOVIDO (tinha antes, não tem agora)
         if (!tihaTimeout || temAgora) return;
 
         let dados = {};
-        try { dados = JSON.parse(require('fs').readFileSync('./database/punicoes.json', 'utf-8')); } catch { return; }
+        try { dados = JSON.parse(fs.readFileSync('./database/punicoes.json', 'utf-8')); } catch { return; }
 
         const muteAtivo = dados[newMember.guild.id]?.[newMember.id]?.muteAtivo;
         if (!muteAtivo) return;
 
         const tempoRestante = muteAtivo.expiresAt - Date.now();
-        if (tempoRestante <= 0) return;
+        if (tempoRestante <= 0) {
+            // Castigo expirou naturalmente — limpa o registro
+            delete dados[newMember.guild.id][newMember.id].muteAtivo;
+            fs.writeFileSync('./database/punicoes.json', JSON.stringify(dados, null, 2));
+            return;
+        }
 
-        await newMember.timeout(tempoRestante, 'Reth Morgan: Remoção não autorizada de castigo — reaplicado').catch(() => {});
+        // ── Verifica flag de remoção autorizada (set pelo r!descastigo) ──
+        const flagKey = `${newMember.guild.id}:${newMember.id}`;
+        if (remocaoAutorizadaSet.has(flagKey)) {
+            remocaoAutorizadaSet.delete(flagKey);
+            // O descastigo.js já limpou o muteAtivo, só sai
+            return;
+        }
 
+        // ── Identifica quem removeu via audit log ─────────────────
         let removedor = null;
         try {
             const logs  = await newMember.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberUpdate });
             const entry = logs.entries.first();
             if (entry && Date.now() - entry.createdTimestamp < 5000) removedor = entry.executor;
         } catch {}
+
+        // ── Verifica se quem removeu é autorizado ─────────────────
+        const removedorId   = removedor?.id;
+        const ehDonoBotRem  = removedorId && OWNER_IDS.includes(removedorId);
+        const ehDonoServRem = removedorId === newMember.guild.ownerId;
+        const ehExecutorRem = removedorId === muteAtivo.executorId;
+
+        let temCargoOuPermRem = false;
+        if (removedorId) {
+            try {
+                const membroRemovedor = await newMember.guild.members.fetch(removedorId).catch(() => null);
+                if (membroRemovedor) {
+                    const temCargoImune = sc.bypass_roles?.length > 0
+                        && membroRemovedor.roles.cache.some(r => sc.bypass_roles.includes(r.id));
+                    const temPermAdmin  = membroRemovedor.permissions.has(PermissionsBitField.Flags.ManageGuild)
+                        || membroRemovedor.permissions.has(PermissionsBitField.Flags.Administrator);
+                    temCargoOuPermRem = temCargoImune || temPermAdmin;
+                }
+            } catch {}
+        }
+
+        const remocaoAutorizada = ehDonoBotRem || ehDonoServRem || ehExecutorRem || temCargoOuPermRem;
+
+        // ── Remoção AUTORIZADA: limpa o registro silenciosamente ──
+        if (remocaoAutorizada) {
+            delete dados[newMember.guild.id][newMember.id].muteAtivo;
+            fs.writeFileSync('./database/punicoes.json', JSON.stringify(dados, null, 2));
+            return;
+        }
+
+        // ── Remoção NÃO AUTORIZADA: reaplica o castigo ───────────
+        await newMember.timeout(tempoRestante, 'Reth Morgan: Remoção não autorizada — reaplicado').catch(() => {});
+
+        const formatDur = (ms) => {
+            const d = Math.floor(ms / 86400000);
+            const h = Math.floor((ms % 86400000) / 3600000);
+            const m = Math.floor((ms % 3600000) / 60000);
+            const s = Math.floor((ms % 60000) / 1000);
+            return [d&&`${d}d`,h&&`${h}h`,m&&`${m}m`,s&&`${s}s`].filter(Boolean).join(' ') || '0s';
+        };
 
         const logEmbed = new EmbedBuilder()
             .setColor('#8B0000')
@@ -480,30 +543,48 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
             .setTitle('🔒 CASTIGO REAPLICADO — REMOÇÃO BLOQUEADA')
             .setDescription('Uma tentativa de remoção não autorizada de castigo foi interceptada.')
             .addFields(
-                { name: '👤 PUNIDO',        value: `<@${newMember.id}> · \`${newMember.id}\``, inline: true },
-                { name: '🕵️ REMOVEDOR',     value: removedor ? `<@${removedor.id}>` : '`Não identificado`', inline: true },
-                { name: '🔫 APLICADO POR',  value: `<@${muteAtivo.executorId}>`, inline: true },
-                { name: '⏱️ TEMPO RESTANTE', value: (() => {
-                    const d = Math.floor(tempoRestante / 86400000);
-                    const h = Math.floor((tempoRestante % 86400000) / 3600000);
-                    const m = Math.floor((tempoRestante % 3600000) / 60000);
-                    const s = Math.floor((tempoRestante % 60000) / 1000);
-                    return [d&&`${d}d`,h&&`${h}h`,m&&`${m}m`,s&&`${s}s`].filter(Boolean).join(' ') || '0s';
-                })(), inline: true },
-                { name: '📋 MOTIVO ORIGINAL', value: muteAtivo.motivo || 'Não informado.', inline: false }
+                { name: '👤 PUNIDO',
+                  value: `<@${newMember.id}> · \`${newMember.id}\``,
+                  inline: true },
+                { name: '🕵️ REMOVEDOR',
+                  value: removedor ? `<@${removedor.id}> · \`${removedor.tag}\`` : '`Não identificado`',
+                  inline: true },
+                { name: '🔫 APLICADO POR',
+                  value: muteAtivo.executorId ? `<@${muteAtivo.executorId}>` : '`Não identificado`',
+                  inline: true },
+                { name: '⏱️ TEMPO RESTANTE',
+                  value: formatDur(tempoRestante),
+                  inline: true },
+                { name: '📋 MOTIVO ORIGINAL',
+                  value: muteAtivo.motivo || 'Não informado.',
+                  inline: false },
+                { name: '✅ QUEM PODE REMOVER',
+                  value:
+                    `<@${muteAtivo.executorId}> *(executor)*\n` +
+                    `<@${newMember.guild.ownerId}> *(dono do servidor)*\n` +
+                    `Cargos imunes · Membros com **Gerenciar Servidor** ou **Administrador**\n` +
+                    `Use \`r!descastigo @${newMember.user.username}\` para remover com autorização.`,
+                  inline: false }
             )
             .setFooter({ text: `Guild ID: ${newMember.guild.id}` })
             .setTimestamp();
 
         await enviarLog(newMember.guild, 'logs_castigo', logEmbed);
 
+        // DM ao removedor
         if (removedor) {
             try {
                 await removedor.send({
                     embeds: [new EmbedBuilder()
                         .setColor('#8B0000')
                         .setTitle('🔒 AÇÃO BLOQUEADA — RETH MORGAN')
-                        .setDescription(`Você tentou remover o castigo de <@${newMember.id}> sem autorização.\nApenas quem aplicou o castigo (<@${muteAtivo.executorId}>) pode removê-lo.\nO castigo foi reaplicado automaticamente.`)
+                        .setDescription(
+                            `Você tentou remover o castigo de <@${newMember.id}> sem autorização.\n\n` +
+                            `**Aplicado por:** <@${muteAtivo.executorId}>\n` +
+                            `**Motivo:** ${muteAtivo.motivo || 'Não informado.'}\n\n` +
+                            `Para remover use \`r!descastigo @usuário\` — mas apenas se você for:\n` +
+                            `• O executor do castigo\n• Dono do servidor\n• Cargo imune configurado no painel\n• Membro com Gerenciar Servidor / Administrador`
+                        )
                         .setTimestamp()
                     ]
                 });
@@ -526,9 +607,7 @@ client.on('guildBanAdd', async (ban) => {
         if (!entry) return;
         const executor = entry.executor;
 
-        // ✅ FIX: ignora ações do próprio bot (r!ban, IA ban, etc)
         if (executor.id === client.user.id) return;
-
         if (isWhitelisted(sc, executor.id, ban.guild)) return;
 
         const agora = Date.now();
@@ -576,9 +655,7 @@ client.on('guildMemberRemove', async (member) => {
         if (!entry || Date.now() - entry.createdTimestamp > 5000) return;
         const executor = entry.executor;
 
-        // ✅ FIX: ignora ações do próprio bot (r!kick, antifake, etc)
         if (executor.id === client.user.id) return;
-
         if (isWhitelisted(sc, executor.id, guild)) return;
 
         const agora = Date.now();
@@ -1018,16 +1095,16 @@ SEGURANÇA OBRIGATÓRIA EM COMANDOS:
         let textoResposta = respostaIA.trim();
 
         // ── LIMPEZA DE MARKDOWN ──
-const crasesMarkdown = '\`\`\`';
-if (textoResposta.startsWith(crasesMarkdown)) {
-    textoResposta = textoResposta.slice(3).trim();
-    if (textoResposta.toLowerCase().startsWith('json')) textoResposta = textoResposta.slice(4).trim();
-    if (textoResposta.endsWith(crasesMarkdown)) textoResposta = textoResposta.slice(0, -3).trim();
-}
+        const crasesMarkdown = '\`\`\`';
+        if (textoResposta.startsWith(crasesMarkdown)) {
+            textoResposta = textoResposta.slice(3).trim();
+            if (textoResposta.toLowerCase().startsWith('json')) textoResposta = textoResposta.slice(4).trim();
+            if (textoResposta.endsWith(crasesMarkdown)) textoResposta = textoResposta.slice(0, -3).trim();
+        }
 
-// ── EXTRAÇÃO DE JSON (mesmo que venha com texto antes) ──
-const jsonMatch = textoResposta.match(/\{[\s\S]*"acao"[\s\S]*\}/);
-if (jsonMatch) textoResposta = jsonMatch[0];
+        // ── EXTRAÇÃO DE JSON ──
+        const jsonMatch = textoResposta.match(/\{[\s\S]*"acao"[\s\S]*\}/);
+        if (jsonMatch) textoResposta = jsonMatch[0];
 
         // ── EXECUÇÃO DE ORDENS JSON ──
         if (textoResposta.startsWith('{') && textoResposta.includes('"acao"')) {
