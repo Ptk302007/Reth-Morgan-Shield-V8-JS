@@ -2,6 +2,7 @@
 //  RETH MORGAN — SHIELD SYSTEM V8
 //  index.js — Servidor + Bot + Painel Web Integrado
 //  FIX: guildMemberUpdate unificado, anti-remoção com flag
+//  FIX: Blacklist check no messageCreate + log integrado
 // ============================================================
 require('dotenv').config();
 const express    = require('express');
@@ -291,6 +292,27 @@ function getConfig(guildId) {
     } catch (e) { return {}; }
 }
 
+// ── BLACKLIST: leitura e checagem ──
+function lerBlacklist() {
+    try {
+        const raw    = fs.readFileSync('./database/blacklist.json', 'utf-8');
+        const parsed = JSON.parse(raw);
+        // suporte ao formato legado (array simples)
+        if (Array.isArray(parsed)) {
+            const novo = {};
+            for (const id of parsed) novo[id] = { addedAt: new Date().toISOString(), addedBy: 'migrado', motivo: 'Migrado do sistema legado.' };
+            fs.writeFileSync('./database/blacklist.json', JSON.stringify(novo, null, 2));
+            return novo;
+        }
+        return parsed;
+    } catch { return {}; }
+}
+
+function estaNaBlacklist(userId) {
+    const bl = lerBlacklist();
+    return !!bl[userId];
+}
+
 async function enviarLog(guild, tipoLog, embed) {
     try {
         const sc = getConfig(guild.id);
@@ -401,7 +423,7 @@ client.once('ready', () => {
         { name: 'Protocolo Anti-Nuke Ativo ☢️', type: 2 },
         { name: 'Desenvolvido por nossos donos 👑', type: 0 },
         { name: 'RETH MORGAN: Executando o caos. Codificando a ordem.', type: 2 },
-        { name: 'Use r!setup-shield pra me adicionar na sua ordem! 🚀', type: 0 }
+        { name: 'Use r!setup pra me adicionar na sua ordem! 🚀', type: 0 }
     ];
     let idx = 0;
     setInterval(() => {
@@ -795,10 +817,73 @@ client.on('channelDelete', async (channel) => {
     } catch (e) {}
 });
 
-// ── EVENTO CENTRAL: MENSAGENS ──
+// ============================================================
+//  EVENTO CENTRAL: MENSAGENS
+// ============================================================
 client.on('messageCreate', async (message) => {
     if (!message.guild || message.author.bot || message.webhookId) return;
     if (message.author.id === client.user?.id) return;
+
+    // ── CHECAGEM DE BLACKLIST ─────────────────────────────────
+    // Bloqueia usuários na lista negra global de usar qualquer
+    // comando ou interagir com a IA. Registra tentativa no log.
+    if (estaNaBlacklist(message.author.id)) {
+        // Só reage se for um comando (evita spam de aviso em msgs normais)
+        if (message.content.startsWith(PREFIX)) {
+            try {
+                const bl      = lerBlacklist();
+                const entrada = bl[message.author.id];
+                const motivo  = entrada?.motivo || 'Sem motivo registrado.';
+
+                // DM discreta ao usuário bloqueado
+                try {
+                    await message.author.send({
+                        embeds: [new EmbedBuilder()
+                            .setColor('#8B0000')
+                            .setAuthor({ name: 'RETH MORGAN — ACESSO NEGADO', iconURL: client.user.displayAvatarURL() })
+                            .setTitle('🩸 BLACKLIST GLOBAL — ACESSO BLOQUEADO')
+                            .setDescription(
+                                'Você está na **lista negra global** do bot e não pode usar nenhum comando.\n\n' +
+                                `**Motivo:** ${motivo}\n\n` +
+                                'Para recorrer, entre em contato com o desenvolvedor do bot.'
+                            )
+                            .setFooter({ text: 'Reth Morgan Shield System V8' })
+                            .setTimestamp()
+                        ]
+                    });
+                } catch (_) {}
+
+                // Log no canal configurado (logs_blacklist)
+                const sc = getConfig(message.guild.id);
+                if (sc.logs_blacklist) {
+                    const logBL = new EmbedBuilder()
+                        .setColor('#8B0000')
+                        .setAuthor({ name: 'RETH MORGAN — BLACKLIST: TENTATIVA BLOQUEADA', iconURL: client.user.displayAvatarURL() })
+                        .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 256 }))
+                        .setTitle('🩸 TENTATIVA DE COMANDO — USUÁRIO BLOQUEADO')
+                        .setDescription('Um usuário na lista negra global tentou usar um comando.')
+                        .addFields(
+                            { name: '👤 Usuário',          value: `<@${message.author.id}>\n\`${message.author.tag}\`\nID: \`${message.author.id}\``, inline: true },
+                            { name: '📋 Motivo do Bloqueio', value: motivo,                                                                            inline: true },
+                            { name: '💬 Comando Tentado',   value: `\`${message.content.slice(0, 100)}\``,                                            inline: false },
+                            { name: '📌 Canal',             value: `<#${message.channel.id}>`,                                                        inline: true },
+                            { name: '🕐 Data/Hora',         value: `<t:${Math.floor(Date.now() / 1000)}:F>`,                                          inline: true },
+                        )
+                        .setFooter({ text: `Shield System V8 • Blacklist Global`, iconURL: client.user.displayAvatarURL() })
+                        .setTimestamp();
+
+                    const canalLog = message.guild.channels.cache.get(sc.logs_blacklist);
+                    if (canalLog && canalLog.permissionsFor(message.guild.members.me)?.has('SendMessages')) {
+                        canalLog.send({ embeds: [logBL] }).catch(() => {});
+                    }
+                }
+            } catch (e) {
+                console.error('[Blacklist Check]', e.message);
+            }
+        }
+        return; // Bloqueia qualquer processamento adicional
+    }
+    // ─────────────────────────────────────────────────────────
 
     let data = { canaisComandos: [] };
     try {
