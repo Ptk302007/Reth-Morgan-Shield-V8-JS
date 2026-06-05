@@ -1,4 +1,11 @@
 'use strict';
+// ============================================================
+//  RETH MORGAN — CASTIGO COMMAND (CORRIGIDO V2)
+//  ✅ Respeita castigo_confirmacao do painel
+//  ✅ Não executa castigo antes da confirmação
+//  ✅ DM ao punido
+//  ✅ Log correto
+// ============================================================
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const fs = require('fs');
 
@@ -15,10 +22,10 @@ function registrarInfracao(guildId, userId, tipo, motivo, duracaoMs, executorId)
         if (!dados[guildId][userId]) dados[guildId][userId] = { warns: 0, mutes: 0, bans: 0, historico: [] };
         dados[guildId][userId][tipo]++;
         dados[guildId][userId].muteAtivo = {
-            expiresAt:  Date.now() + duracaoMs,
+            expiresAt: Date.now() + duracaoMs,
             duracaoMs,
             motivo,
-            executorId  // quem aplicou — usado para validar remoção autorizada
+            executorId
         };
         dados[guildId][userId].historico.push({
             tipo: 'CASTIGO', motivo, data: new Date().toLocaleDateString('pt-BR'),
@@ -126,52 +133,11 @@ module.exports = {
         const alvoTag   = getUserTag(alvo.user);
         const autorTag  = getUserTag(message.author);
 
-        const embedConfirm = new EmbedBuilder()
-            .setColor('#b8860b')
-            .setAuthor({ name: 'RETH MORGAN — PROTOCOLO DE CASTIGO', iconURL: client.user.displayAvatarURL() })
-            .setThumbnail(alvo.user.displayAvatarURL({ dynamic: true, size: 256 }))
-            .setTitle('⏱️ CONFIRMAÇÃO DE CASTIGO')
-            .addFields(
-                { name: '👤 ALVO',    value: `<@${alvo.id}>\n\`${alvoTag}\``, inline: true },
-                { name: '⏱️ DURAÇÃO', value: `\`${formatDuracao(duracaoMs)}\`\nExpira: <t:${expiresAt}:R>`, inline: true },
-                { name: '📋 MOTIVO',  value: `\`\`\`${motivo}\`\`\``, inline: false },
-                { name: '⚠️ AÇÃO',    value: 'Reaja ✅ para **confirmar** · ❌ para **cancelar**\n*Aguardando 30 segundos...*', inline: false }
-            )
-            .setFooter({ text: `Servidor: ${message.guild.name}`, iconURL: message.guild.iconURL() || undefined })
-            .setTimestamp();
-
-        const usarConfirmacao = sc.castigo_confirmacao !== false;
-        const msgConfirm = await message.channel.send({ embeds: [embedConfirm] });
-
-        if (usarConfirmacao) {
-            await msgConfirm.react('✅').catch(() => {});
-            await msgConfirm.react('❌').catch(() => {});
-
-            const filter = (r, u) => ['✅', '❌'].includes(r.emoji.name) && u.id === message.author.id;
-            const collector = msgConfirm.createReactionCollector({ filter, time: 30_000, max: 1 });
-            let respondeu = false;
-
-            collector.on('collect', async (reaction) => {
-                respondeu = true;
-                if (reaction.emoji.name === '❌') {
-                    await msgConfirm.edit({ embeds: [new EmbedBuilder().setColor('#2c2c2c').setTitle('🚫 CASTIGO CANCELADO').setDescription(`O castigo de **${alvoTag}** foi abortado.`).setTimestamp()] });
-                    await msgConfirm.reactions.removeAll().catch(() => {});
-                    return;
-                }
-                await executarCastigo();
-            });
-
-            collector.on('end', async () => {
-                if (!respondeu) {
-                    await msgConfirm.edit({ embeds: [new EmbedBuilder().setColor('#2c2c2c').setTitle('⏰ TEMPO ESGOTADO').setDescription('Operação de castigo expirou por inatividade.').setTimestamp()] });
-                    await msgConfirm.reactions.removeAll().catch(() => {});
-                }
-            });
-        } else {
-            await executarCastigo();
-        }
-
-        async function executarCastigo() {
+        // ─────────────────────────────────────────────────────────
+        // Função que executa o castigo de fato
+        // ─────────────────────────────────────────────────────────
+        async function executarCastigo(msgParaEditar) {
+            // DM ao punido
             try {
                 await alvo.send({
                     embeds: [new EmbedBuilder()
@@ -190,18 +156,24 @@ module.exports = {
                 });
             } catch {}
 
+            // Aplica o timeout
             try {
                 await alvo.timeout(duracaoMs, `[${autorTag}] ${motivo}`);
             } catch (err) {
-                await msgConfirm.edit({
-                    embeds: [new EmbedBuilder().setColor('#8B0000').setTitle('❌ ERRO AO APLICAR CASTIGO')
-                        .setDescription(`Não foi possível aplicar o timeout em **${alvoTag}**.\n\`\`\`${err.message}\`\`\``).setTimestamp()]
-                });
-                await msgConfirm.reactions.removeAll().catch(() => {});
+                const embedErro = new EmbedBuilder()
+                    .setColor('#8B0000')
+                    .setTitle('❌ ERRO AO APLICAR CASTIGO')
+                    .setDescription(`Não foi possível aplicar o timeout em **${alvoTag}**.\n\`\`\`${err.message}\`\`\``)
+                    .setTimestamp();
+                if (msgParaEditar) {
+                    await msgParaEditar.reactions.removeAll().catch(() => {});
+                    await msgParaEditar.edit({ embeds: [embedErro] }).catch(() => {});
+                } else {
+                    await message.channel.send({ embeds: [embedErro] }).catch(() => {});
+                }
                 return;
             }
 
-            // Salva executorId junto para validar remoção autorizada
             registrarInfracao(message.guild.id, alvo.id, 'mutes', motivo, duracaoMs, message.author.id);
 
             const embedResult = new EmbedBuilder()
@@ -219,8 +191,12 @@ module.exports = {
                 .setFooter({ text: `${message.guild.name} · Shield System V8`, iconURL: message.guild.iconURL() || undefined })
                 .setTimestamp();
 
-            await msgConfirm.reactions.removeAll().catch(() => {});
-            await msgConfirm.edit({ embeds: [embedResult] });
+            if (msgParaEditar) {
+                await msgParaEditar.reactions.removeAll().catch(() => {});
+                await msgParaEditar.edit({ embeds: [embedResult] }).catch(() => {});
+            } else {
+                await message.channel.send({ embeds: [embedResult] }).catch(() => {});
+            }
 
             const logEmbed = new EmbedBuilder()
                 .setColor('#b8860b')
@@ -239,5 +215,70 @@ module.exports = {
 
             await enviarLog(message.guild, 'logs_castigo', logEmbed);
         }
+
+        // ─────────────────────────────────────────────────────────
+        // Confirmação desativada → executa direto
+        // ─────────────────────────────────────────────────────────
+        if (sc.castigo_confirmacao === false) {
+            await executarCastigo(null);
+            return;
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // Confirmação ativada → embed + reactions
+        // ─────────────────────────────────────────────────────────
+        const embedConfirm = new EmbedBuilder()
+            .setColor('#b8860b')
+            .setAuthor({ name: 'RETH MORGAN — PROTOCOLO DE CASTIGO', iconURL: client.user.displayAvatarURL() })
+            .setThumbnail(alvo.user.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setTitle('⏱️ CONFIRMAÇÃO DE CASTIGO')
+            .addFields(
+                { name: '👤 ALVO',    value: `<@${alvo.id}>\n\`${alvoTag}\``, inline: true },
+                { name: '⏱️ DURAÇÃO', value: `\`${formatDuracao(duracaoMs)}\`\nExpira: <t:${expiresAt}:R>`, inline: true },
+                { name: '📋 MOTIVO',  value: `\`\`\`${motivo}\`\`\``, inline: false },
+                { name: '⚠️ AÇÃO',    value: 'Reaja ✅ para **confirmar** · ❌ para **cancelar**\n*Aguardando 30 segundos...*', inline: false }
+            )
+            .setFooter({ text: `Servidor: ${message.guild.name}`, iconURL: message.guild.iconURL() || undefined })
+            .setTimestamp();
+
+        const msgConfirm = await message.channel.send({ embeds: [embedConfirm] });
+        await msgConfirm.react('✅').catch(() => {});
+        await msgConfirm.react('❌').catch(() => {});
+
+        const filter = (r, u) => ['✅', '❌'].includes(r.emoji.name) && u.id === message.author.id;
+        const collector = msgConfirm.createReactionCollector({ filter, time: 30_000, max: 1 });
+        let respondeu = false;
+
+        collector.on('collect', async (reaction) => {
+            respondeu = true;
+            await msgConfirm.reactions.removeAll().catch(() => {});
+
+            if (reaction.emoji.name === '❌') {
+                return msgConfirm.edit({
+                    embeds: [new EmbedBuilder()
+                        .setColor('#2c2c2c')
+                        .setTitle('🚫 CASTIGO CANCELADO')
+                        .setDescription(`O castigo de **${alvoTag}** foi abortado.`)
+                        .setTimestamp()
+                    ]
+                });
+            }
+
+            await executarCastigo(msgConfirm);
+        });
+
+        collector.on('end', async () => {
+            if (!respondeu) {
+                await msgConfirm.reactions.removeAll().catch(() => {});
+                await msgConfirm.edit({
+                    embeds: [new EmbedBuilder()
+                        .setColor('#2c2c2c')
+                        .setTitle('⏰ TEMPO ESGOTADO')
+                        .setDescription('Operação de castigo expirou por inatividade.')
+                        .setTimestamp()
+                    ]
+                }).catch(() => {});
+            }
+        });
     }
 };
