@@ -60,7 +60,7 @@ async function enviarLog(guild, embed) {
 
 module.exports = {
     name: 'descastigo',
-    aliases: ['untimeout', 'desprende', 'dessilenciar', 'uncastigo'],
+    aliases: ['untimeout', 'soltar', 'dessilenciar', 'uncastigo'],
 
     execute: async (message, args, client, OWNER_ID) => {
         const OWNER_IDS = [OWNER_ID, '1507543140800921610'];
